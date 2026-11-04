@@ -4,6 +4,7 @@ import { ACHIEVEMENTS, awardAchievements } from '../game/achievements';
 import { touchDay } from '../game/actions';
 import { levelFromXp, rankForLevel } from '../game/levels';
 import { emptyProgress, loadProgress, saveProgress, type Progress } from '../game/progress';
+import { hasData, pullProgress, pushProgress, type SyncState } from './sync';
 
 export interface Toast {
   id: number;
@@ -23,6 +24,8 @@ interface Store {
   dismissToast(id: number): void;
   rankUp: number | null;
   ackRankUp(): void;
+  /** где хранится прогресс и удалось ли сохранить */
+  sync: SyncState;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -34,6 +37,62 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const idRef = useRef(1);
   const ref = useRef(progress);
   ref.current = progress;
+
+  const [sync, setSync] = useState<SyncState>({ kind: 'loading' });
+  const pushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dirty = useRef(false);
+
+  /** Принять версию из файла (она новее) — без отметки времени и без обратной записи */
+  const adopt = useCallback((p: Progress) => {
+    saveProgress(p);
+    ref.current = p;
+    setProgress(p);
+  }, []);
+
+  const flush = useCallback(
+    async (keepalive = false) => {
+      if (!dirty.current) return;
+      dirty.current = false;
+      const r = await pushProgress(ref.current, keepalive);
+      setSync(r.state);
+      if (r.newer) adopt(r.newer);
+    },
+    [adopt],
+  );
+
+  /** Сохранить в файл через секунду после последнего изменения */
+  const schedulePush = useCallback(() => {
+    dirty.current = true;
+    if (pushTimer.current) clearTimeout(pushTimer.current);
+    pushTimer.current = setTimeout(() => void flush(), 1200);
+  }, [flush]);
+
+  // старт: читаем файл; новее браузера — берём его, иначе переносим прогресс браузера в файл
+  useEffect(() => {
+    let alive = true;
+    pullProgress().then(({ reply, state }) => {
+      if (!alive) return;
+      setSync(state);
+      if (!reply) return;
+      const local = ref.current;
+      const remote = reply.progress;
+      if (remote && (remote.updatedAt ?? 0) >= (local.updatedAt ?? 0) && (hasData(remote) || !hasData(local))) adopt(remote);
+      else if (hasData(local)) {
+        if (!local.updatedAt) local.updatedAt = Date.now();
+        dirty.current = true;
+        void flush();
+      }
+    });
+    const onHide = () => {
+      if (dirty.current) void flush(true);
+    };
+    window.addEventListener('pagehide', onHide);
+    document.addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && onHide());
+    return () => {
+      alive = false;
+      window.removeEventListener('pagehide', onHide);
+    };
+  }, [adopt, flush]);
 
   const toast = useCallback((t: Omit<Toast, 'id'>) => {
     const id = idRef.current++;
@@ -49,10 +108,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (gained > 0) toast({ kind: 'xp', text: `+${gained} XP` });
       const rank = rankForLevel(levelFromXp(next.xp)).id;
       if (rank > next.seenRank) setRankUp(rank);
+      next.updatedAt = Date.now();
       saveProgress(next);
       setProgress(next);
+      schedulePush();
     },
-    [toast],
+    [toast, schedulePush],
   );
 
   const update = useCallback(
@@ -67,11 +128,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [commit],
   );
 
-  const replace = useCallback((p: Progress) => {
-    saveProgress(p);
-    ref.current = p;
-    setProgress(p);
-  }, []);
+  const replace = useCallback(
+    (p: Progress) => {
+      p.updatedAt = Date.now();
+      saveProgress(p);
+      ref.current = p;
+      setProgress(p);
+      schedulePush();
+    },
+    [schedulePush],
+  );
 
   const reset = useCallback(() => replace(emptyProgress()), [replace]);
 
@@ -86,9 +152,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [progress.profile.theme]);
 
   const value = useMemo<Store>(
-    () => ({ progress, update, replace, reset, toasts, toast, dismissToast: (id) => setToasts((t) => t.filter((x) => x.id !== id)), rankUp, ackRankUp }),
-    [progress, update, replace, reset, toasts, toast, rankUp, ackRankUp],
+    () => ({ progress, update, replace, reset, toasts, toast, dismissToast: (id) => setToasts((t) => t.filter((x) => x.id !== id)), rankUp, ackRankUp, sync }),
+    [progress, update, replace, reset, toasts, toast, rankUp, ackRankUp, sync],
   );
+  // пока читаем файл прогресса — не показываем сайт (иначе на новом браузере открылся бы онбординг)
+  if (sync.kind === 'loading') return <div className="page narrow"><p className="muted">Загружаю прогресс…</p></div>;
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

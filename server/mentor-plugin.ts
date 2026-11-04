@@ -5,6 +5,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { delimiter, join } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { MENTOR_SYSTEM, buildPrompt, validateRequest } from './mentor-prompt';
+import { readProgress, resolveDataDir, writeProgress } from './progress-store';
 
 /**
  * Ментор на базе Claude. Работает внутри dev/preview-сервера Vite (отдельный бэкенд не нужен).
@@ -179,9 +180,48 @@ export function isLocalOrigin(origin: string): boolean {
   }
 }
 
+function sendJson(res: ServerResponse, code: number, data: unknown) {
+  res.statusCode = code;
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store');
+  res.end(JSON.stringify(data));
+}
+
+/** Прогресс в файле: GET — прочитать, PUT — сохранить (только с этого же компьютера) */
+async function handleProgress(req: IncomingMessage, res: ServerResponse) {
+  const { dir, source } = resolveDataDir();
+  if (req.method === 'GET') {
+    try {
+      const r = readProgress(dir);
+      return sendJson(res, 200, { dir, source, progress: r?.progress ?? null, savedAt: r?.savedAt ?? null });
+    } catch (e) {
+      return sendJson(res, 500, { dir, source, error: `Не удалось прочитать ${dir}: ${(e as Error).message}` });
+    }
+  }
+  if (req.method === 'PUT') {
+    const origin = req.headers.origin;
+    if (!isLocalHost(req.headers.host ?? '') || (origin && !isLocalOrigin(origin)) || !/^application\/json\b/i.test(req.headers['content-type'] ?? '')) return sendJson(res, 403, { error: 'only localhost' });
+    try {
+      const body = JSON.parse(await readBody(req, 5_000_000));
+      if (!body || typeof body.progress !== 'object' || !body.progress) return sendJson(res, 400, { error: 'progress required' });
+      const r = writeProgress(dir, body.progress);
+      if (!r.ok) return sendJson(res, 409, { dir, source, progress: r.conflict.progress, savedAt: r.conflict.savedAt ?? null });
+      return sendJson(res, 200, { dir, source, savedAt: r.savedAt });
+    } catch (e) {
+      return sendJson(res, 500, { dir, source, error: `Не удалось сохранить в ${dir}: ${(e as Error).message}` });
+    }
+  }
+  res.statusCode = 405;
+  res.end();
+}
+
 function middleware(): Connect.NextHandleFunction {
   return (req, res, next) => {
     const url = req.url ?? '';
+    if (url === '/api/progress') {
+      handleProgress(req, res).catch((e) => sendJson(res, 500, { error: String(e) }));
+      return;
+    }
     if (url === '/api/mentor/status' && req.method === 'GET') {
       checkCli().then((s) => {
         res.setHeader('Content-Type', 'application/json');

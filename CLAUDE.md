@@ -13,7 +13,7 @@
 ## Стек и команды
 
 - Vite 5 + React 18 + TypeScript, без бэкенда; xterm.js; sql.js (SQLite/WASM); marked.
-- `npm install && npm run dev` — запуск; `npm test` — Vitest (держать зелёным, сейчас 716 тестов);
+- `npm install && npm run dev` — запуск; `npm test` — Vitest (держать зелёным, сейчас 719 тестов);
   `npm run build` — `tsc --noEmit && vite build`; `npm run typecheck`.
 - Ментор работает только в dev/preview-сервере Vite (плагин `server/mentor-plugin.ts`): вызывает локальный
   `claude -p` (вход владельца в Claude Code с подпиской Pro, или `ANTHROPIC_API_KEY`). Без него — офлайн-шаблоны.
@@ -32,14 +32,16 @@ src/engine/       checks.ts (проверки по состоянию/вывод
 src/sql/          engine.ts — sql.js, openDb/runQuery/gradeSql (сравнение результатов на свежих копиях БД)
 src/obs/          promql.ts (мини-PromQL), kql.ts (поиск логов), types.ts
 src/game/         config.ts (ВСЕ числа: XP, уровни, ранги, веса освоения, онбординг), levels, mastery,
-                  placement (адаптивный тест + план), unlock, achievements, review (SRS), progress (схема
-                  localStorage `l3quest.progress.v1`, миграции, экспорт/импорт), actions
+                  placement (адаптивный тест + план), unlock, achievements, review (SRS), progress (схема,
+                  миграции, экспорт/импорт), actions
+src/state/        store (прогресс + localStorage-кэш), sync.ts (синхронизация с файлом через /api/progress)
 src/mentor/       MentorWidget, context (что видит ментор), summary, offline, ask (запрос из урока)
 src/pages/        Onboarding, PlanView, Home (карта), LessonPage (теория/практика/тест/итоги, ToolPanes),
                   Profile, Reference, Review, Market
 src/ui/           Terminal (xterm + nano-оверлей), SqlConsole, ObsConsole, LineChart, WriteBox, QuestionCard,
                   Avatar (8 стадий pixel-art SVG), Markdown (safe-режим для ответов ментора)
-server/           mentor-plugin.ts, mentor-prompt.ts (+ тест)
+server/           mentor-plugin.ts (ментор + /api/progress), mentor-prompt.ts, progress-store.ts (файл прогресса:
+                  L3_DATA_DIR → OneDrive\my-progress → ./data; атомарная запись, бэкапы, защита от затирания)
 content/modules/<NN-slug>/module.json + lessons/NN-x.md (теория) + NN-x.ts (LessonDef), data.ts — датасеты
 content/placement/<NN-slug>.ts — банк входного теста; content/market/trends.json — тренды рынка
 content/shared/   logs.ts (детерминированные генераторы логов, rng), obs.ts (конструктор метрик)
@@ -96,7 +98,9 @@ docs/curriculum-sources.md — обоснование программы и ис
   /dev/null, /proc, флаги curl/ping/dig, openssl x509, kubectl -l, KQL-фразы, сравнение PromQL.
 - Окружение урока восстанавливается после перезагрузки/сброса и в «Повторении»; самозасчёт заданий
   ловит content.test; ментор защищён от запросов с чужих сайтов (Origin + JSON).
-- Проверено: 716 тестов, сборка, все 67 уроков в браузере без ошибок, сквозной сценарий, ширина 390 px.
+- Прогресс хранится в файле `OneDrive\my-progress\progress.json` (браузер — кэш); папка создана в OneDrive
+  владельца (рабочий аккаунт). Ментор работает на Windows с claude.cmd и claude.exe; start.bat; порт фиксирован.
+- Проверено: 719 тестов, сборка, все 67 уроков в браузере без ошибок, сквозной сценарий, ширина 390 px.
 
 Известные ограничения / заметки:
 - Веткой по умолчанию на GitHub всё ещё может быть `claude/quirky-franklin-c121tq` — владелец должен

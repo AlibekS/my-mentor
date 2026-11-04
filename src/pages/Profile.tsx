@@ -15,7 +15,7 @@ import { RANKS } from '../game/config';
 const STATUS_LABEL = { 'not-started': 'не начата', 'in-progress': 'в процессе', mastered: 'освоена', 'review-due': 'пора повторить' } as const;
 
 export function Profile() {
-  const { progress, update, replace, reset, toast } = useStore();
+  const { progress, update, replace, reset, toast, sync } = useStore();
   const lv = levelProgress(progress.xp);
   const rank = rankForLevel(lv.level);
   const readiness = overallReadiness(modules, progress);
@@ -178,10 +178,19 @@ export function Profile() {
           <button className="btn" onClick={doExport}>⬇ Экспорт прогресса (JSON)</button>
           <button className="btn" onClick={() => fileRef.current?.click()}>⬆ Импорт из JSON</button>
           <input ref={fileRef} type="file" accept="application/json,.json" hidden onChange={(e) => e.target.files?.[0] && doImport(e.target.files[0])} />
-          <button className="btn danger" onClick={() => confirm('Сбросить ВЕСЬ прогресс? Это нельзя отменить. Сначала можно сделать экспорт.') && confirm('Точно сбросить?') && (reset(), go('onboarding'))}>
+          <button className="btn danger" onClick={() => confirm('Сбросить ВЕСЬ прогресс? Копия «до сброса» останется в папке backups рядом с файлом прогресса.') && confirm('Точно сбросить?') && (reset(), go('onboarding'))}>
             Сбросить прогресс
           </button>
         </div>
+        <p className="small muted" role="status">
+          {sync.kind === 'ok' ? (
+            <>💾 Прогресс сохраняется в файл <code>{sync.dir}{sync.dir.includes('\\') ? '\\' : '/'}progress.json</code>{sync.savedAt ? ` · последнее сохранение ${new Date(sync.savedAt).toLocaleString('ru-RU')}` : ''}. Ежедневные копии — в папке <code>backups</code> рядом.</>
+          ) : sync.kind === 'error' ? (
+            <span className="stale">⚠ Не удалось сохранить в файл{sync.dir ? ` (${sync.dir})` : ''}: {sync.error}. Прогресс пока хранится только в браузере.</span>
+          ) : sync.kind === 'off' ? (
+            <>Прогресс хранится только в браузере: {sync.reason}. Запускай сайт через <code>npm run dev</code> или <code>start.bat</code>, чтобы он сохранялся в файл.</>
+          ) : null}
+        </p>
       </section>
     </div>
   );

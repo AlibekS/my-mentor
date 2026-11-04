@@ -100,6 +100,8 @@ export interface MentorMessage {
 
 export interface Progress {
   version: number;
+  /** время последнего изменения (мс) — кто новее, файл или браузер */
+  updatedAt?: number;
   profile: { name: string; createdAt: number; theme: 'dark' | 'light' };
   xp: number;
   achievements: Record<string, number>;
