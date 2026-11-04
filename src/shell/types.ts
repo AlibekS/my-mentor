@@ -47,6 +47,8 @@ export interface Service {
   /** Процесс, который создаётся при старте сервиса */
   startProcess?: Omit<Proc, 'pid'>;
   listen?: Omit<Listener, 'pid' | 'process'>[];
+  /** Условия успешного старта — проверяются по файловой системе в момент start/restart */
+  requires?: { path: string; readableBy?: string; contains?: string; notContains?: string; error: string }[];
 }
 
 export interface HttpEndpoint {

@@ -16,6 +16,21 @@ export function startService(ctx: Parameters<CommandDef['run']>[2], s: Service):
     s.logs.push({ time: t, priority: 'err', message: `Failed to start ${s.description}.` });
     return `Job for ${s.name}.service failed because the control process exited with error code.\nSee "systemctl status ${s.name}.service" and "journalctl -xeu ${s.name}.service" for details.\n`;
   }
+  for (const r of s.requires ?? []) {
+    const n = ctx.fs.lookup(r.path);
+    const bad =
+      !n ||
+      (r.readableBy && !ctx.fs.can(n, r.readableBy, 4)) ||
+      (r.contains !== undefined && !n.content.includes(r.contains)) ||
+      (r.notContains !== undefined && n.content.includes(r.notContains));
+    if (bad) {
+      s.active = 'failed';
+      for (const l of r.error.split('\n')) s.logs.push({ time: t, priority: 'err', message: l });
+      s.logs.push({ time: t, priority: 'err', message: `${s.name}.service: Main process exited, code=exited, status=1/FAILURE` });
+      s.logs.push({ time: t, priority: 'err', message: `Failed to start ${s.description}.` });
+      return `Job for ${s.name}.service failed because the control process exited with error code.\nSee "systemctl status ${s.name}.service" and "journalctl -xeu ${s.name}.service" for details.\n`;
+    }
+  }
   // порт уже занят?
   for (const l of s.listen ?? []) {
     const busy = ctx.state.listeners.find((x) => x.local.split(':').pop() === l.local.split(':').pop() && x.process !== s.name);
