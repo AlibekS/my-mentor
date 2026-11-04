@@ -26,6 +26,6 @@
   "reviewedAt": "2026-11-04",
   "demand": "stable",
   "marketNote": "Bash/Python-скриптинг указан в большинстве вакансий как «must have» для автоматизации рутинных проверок.",
-  "status": "planned",
+  "status": "ready",
   "estimatedMinutes": 150
 }

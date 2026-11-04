@@ -261,3 +261,62 @@ describe('disk accounting', () => {
     expect(sh.fs.exists('/var/log/app/app.log')).toBe(true);
   });
 });
+
+describe('scripting', () => {
+  const sh = () =>
+    new Shell({
+      files: {
+        '/var/log/app.log': 'INFO a\nERROR b\nERROR c\n',
+        '/home/alibek/servers.txt': { owner: 'alibek', content: 'web-01\nweb-02\ndb-01\n' },
+        '/home/alibek/check.sh': { owner: 'alibek', mode: 0o644, content: '#!/bin/bash\n# проверка\nset -euo pipefail\nFILE=${1:-/var/log/app.log}\nCOUNT=$(grep -c ERROR "$FILE")\nif [ "$COUNT" -gt 1 ]; then\n  echo "ALERT: $COUNT errors in $FILE"\n  exit 2\nelse\n  echo "OK"\nfi\n' },
+      },
+    });
+  it('command substitution, arithmetic and ${:-}', () => {
+    const s = sh();
+    expect(s.run('echo "errors: $(grep -c ERROR /var/log/app.log)"').stdout).toBe('errors: 2\n');
+    expect(s.run('echo $((2 + 3 * 4))').stdout).toBe('14\n');
+    expect(s.run('X=5; X=$((X+1)); echo $X').stdout).toBe('6\n');
+    expect(s.run('echo ${NOPE:-default}').stdout).toBe('default\n');
+    expect(s.run('echo `hostname`').stdout).toBe('srv-prod-01\n');
+  });
+  it('if / test', () => {
+    const s = sh();
+    expect(s.run('if [ -f /var/log/app.log ]; then echo yes; else echo no; fi').stdout).toBe('yes\n');
+    expect(s.run('if grep -q FATAL /var/log/app.log; then echo found; elif [ 1 -eq 1 ]; then echo elif; fi').stdout).toBe('elif\n');
+    expect(s.run('[ 3 -lt 2 ] && echo a || echo b').stdout).toBe('b\n');
+    expect(s.run('[[ app.log == *.log ]] && echo match').stdout).toBe('match\n');
+  });
+  it('for and while loops', () => {
+    const s = sh();
+    expect(s.run('for i in 1 2 3; do echo n$i; done').stdout).toBe('n1\nn2\nn3\n');
+    expect(s.run('for f in /var/log/*.log; do echo $f; done').stdout).toBe('/var/log/app.log\n');
+    expect(s.run('for h in $(cat ~/servers.txt); do echo "ping $h"; done').stdout).toBe('ping web-01\nping web-02\nping db-01\n');
+    expect(s.run('while read -r h; do echo "[$h]"; done < ~/servers.txt').stdout).toBe('[web-01]\n[web-02]\n[db-01]\n');
+    expect(s.run('grep ERROR /var/log/app.log | while read lvl msg; do echo $msg; done').stdout).toBe('b\nc\n');
+    expect(s.run('i=0; while [ $i -lt 3 ]; do i=$((i+1)); done; echo $i').stdout).toBe('3\n');
+  });
+  it('runs scripts with args, permissions and exit codes', () => {
+    const s = sh();
+    expect(s.run('./check.sh').stderr).toContain('Permission denied');
+    expect(s.run('./check.sh').exitCode).toBe(126);
+    expect(s.run('bash check.sh').stdout).toBe('ALERT: 2 errors in /var/log/app.log\n');
+    expect(s.run('echo $?').stdout).toBe('2\n');
+    s.run('chmod +x check.sh');
+    expect(s.run('./check.sh /home/alibek/servers.txt').exitCode).toBe(1); // grep -c → 0 совпадений → set -e
+    expect(s.run('./check.sh').exitCode).toBe(2);
+    expect(s.run('echo $FILE').stdout).toBe('\n'); // переменные скрипта не протекают
+  });
+  it('functions, set -u, printf', () => {
+    const s = sh();
+    expect(s.run('greet() { echo "hi $1"; }; greet L3').stdout).toBe('hi L3\n');
+    expect(s.run('bash -c "set -u; echo $UNDEFINED_VAR"').exitCode).toBe(0); // раскрыто внешним шеллом до запуска
+    s.fs.write('/tmp/u.sh', 'set -u\necho "$MISSING"\necho after\n', 'alibek');
+    const r = s.run('bash /tmp/u.sh');
+    expect(r.stderr).toContain('unbound variable');
+    expect(r.stdout).not.toContain('after');
+    expect(s.run('printf "%-6s|%3d\\n" web 7').stdout).toBe('web   |  7\n');
+  });
+  it('nano requests the editor', () => {
+    expect(sh().run('nano ~/new.sh').editFile).toBe('/home/alibek/new.sh');
+  });
+});

@@ -36,7 +36,48 @@ export const EXIT_PLACEHOLDER = '\u0001?\u0001';
 
 type Tok = { kind: 'word'; word: Word } | { kind: 'op'; op: string };
 
-export function tokenize(line: string, env: Record<string, string>): Tok[] {
+export interface ExpandOptions {
+  /** выполнить команду для $(...) и `...` и вернуть её stdout */
+  subst?: (cmd: string) => string;
+  /** set -u: ошибка при обращении к неопределённой переменной */
+  nounset?: boolean;
+}
+
+/** Найти закрывающую скобку для $( … ) с учётом вложенности и кавычек; i — позиция после "(" */
+export function matchParen(s: string, i: number): number {
+  let depth = 1;
+  let q: string | null = null;
+  for (let k = i; k < s.length; k++) {
+    const c = s[k];
+    if (q) {
+      if (c === q) q = null;
+      else if (c === '\\' && q === '"') k++;
+      continue;
+    }
+    if (c === "'" || c === '"') q = c;
+    else if (c === '(') depth++;
+    else if (c === ')') {
+      depth--;
+      if (depth === 0) return k;
+    }
+  }
+  return -1;
+}
+
+/** Целочисленная арифметика $(( … )) */
+export function arith(expr: string, env: Record<string, string>): string {
+  const src = expr.replace(/\$?([A-Za-z_][A-Za-z0-9_]*)/g, (_m, n) => String(parseInt(env[n] ?? '0', 10) || 0));
+  if (!/^[\d\s+\-*/%()<>=!&|]*$/.test(src)) throw new ParseError(`${expr}: syntax error in expression`);
+  try {
+    const v = Function(`"use strict"; return (${src.replace(/\//g, '/') || 0});`)();
+    if (typeof v === 'boolean') return v ? '1' : '0';
+    return String(Math.trunc(Number(v)));
+  } catch {
+    throw new ParseError(`${expr}: syntax error in expression`);
+  }
+}
+
+export function tokenize(line: string, env: Record<string, string>, opts: ExpandOptions = {}): Tok[] {
   const toks: Tok[] = [];
   let i = 0;
   let cur = '';
@@ -50,14 +91,43 @@ export function tokenize(line: string, env: Record<string, string>): Tok[] {
     inWord = false;
   };
 
+  const lookup = (name: string): string => {
+    if (name in env) return env[name];
+    if (opts.nounset && !/^\d+$/.test(name)) throw new ParseError(`${name}: unbound variable`);
+    return '';
+  };
+
   const expandVar = (): string => {
     // i указывает на символ после $
+    if (line.startsWith('((', i)) {
+      const end = line.indexOf('))', i + 2);
+      if (end < 0) throw new ParseError('unexpected EOF while looking for matching `))\'');
+      const expr = line.slice(i + 2, end);
+      i = end + 2;
+      return arith(expr, env);
+    }
+    if (line[i] === '(') {
+      const end = matchParen(line, i + 1);
+      if (end < 0) throw new ParseError("unexpected EOF while looking for matching `)'");
+      const cmd = line.slice(i + 1, end);
+      i = end + 1;
+      return opts.subst ? opts.subst(cmd).replace(/\n+$/, '') : '';
+    }
     if (line[i] === '{') {
       const end = line.indexOf('}', i);
       if (end < 0) throw new ParseError('bad substitution');
-      const name = line.slice(i + 1, end);
+      const inner = line.slice(i + 1, end);
       i = end + 1;
-      return env[name] ?? '';
+      // ${VAR:-default} и ${#VAR}
+      const def = /^([A-Za-z_][A-Za-z0-9_]*|\d+):-(.*)$/.exec(inner);
+      if (def) return env[def[1]] || def[2];
+      if (inner.startsWith('#')) return String((env[inner.slice(1)] ?? '').length);
+      return lookup(inner);
+    }
+    if (/[0-9#@*]/.test(line[i] ?? '')) {
+      const c = line[i++];
+      if (c === '*') return env['@'] ?? '';
+      return env[c] ?? (c === '#' ? '0' : '');
     }
     if (line[i] === '?') {
       i++;
@@ -67,7 +137,7 @@ export function tokenize(line: string, env: Record<string, string>): Tok[] {
     const m = /^[A-Za-z_][A-Za-z0-9_]*/.exec(line.slice(i));
     if (!m) return '$';
     i += m[0].length;
-    return env[m[0]] ?? '';
+    return lookup(m[0]);
   };
 
   while (i < line.length) {
@@ -102,6 +172,14 @@ export function tokenize(line: string, env: Record<string, string>): Tok[] {
       }
       if (i >= line.length) throw new ParseError('unexpected EOF while looking for matching `"\'');
       i++;
+      continue;
+    }
+    if (c === '`') {
+      const end = line.indexOf('`', i + 1);
+      if (end < 0) throw new ParseError('unexpected EOF while looking for matching ``\'');
+      cur += opts.subst ? opts.subst(line.slice(i + 1, end)).replace(/\n+$/, '') : '';
+      inWord = true;
+      i = end + 1;
       continue;
     }
     if (c === '\\') {
@@ -140,8 +218,8 @@ export function tokenize(line: string, env: Record<string, string>): Tok[] {
   return toks;
 }
 
-export function parse(line: string, env: Record<string, string> = {}): ListItem[] {
-  const toks = tokenize(line, env);
+export function parse(line: string, env: Record<string, string> = {}, opts: ExpandOptions = {}): ListItem[] {
+  const toks = tokenize(line, env, opts);
   const items: ListItem[] = [];
   let pipeline: Pipeline = { commands: [] };
   let cmd: SimpleCommand = { words: [], redirects: [] };
@@ -214,4 +292,54 @@ export function globToRegExp(glob: string): RegExp {
     } else re += c.replace(/[.+^${}()|\\]/g, '\\$&');
   }
   return new RegExp(re + '$');
+}
+
+/**
+ * Разбить строку на элементы списка по ; && || (вне кавычек и $( )), не раскрывая переменные —
+ * каждый элемент раскрывается в момент выполнения, как в bash.
+ */
+export function splitList(line: string): { text: string; op: ListItem['op'] }[] {
+  const out: { text: string; op: ListItem['op'] }[] = [];
+  let cur = '';
+  let op: ListItem['op'] = null;
+  let q: string | null = null;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (q) {
+      cur += c;
+      if (c === '\\' && q === '"' && i + 1 < line.length) cur += line[++i];
+      else if (c === q) q = null;
+      continue;
+    }
+    if (c === "'" || c === '"' || c === '`') {
+      q = c;
+      cur += c;
+      continue;
+    }
+    if (c === '\\' && i + 1 < line.length) {
+      cur += c + line[++i];
+      continue;
+    }
+    if (c === '$' && line[i + 1] === '(') {
+      const end = matchParen(line, i + 2);
+      if (end < 0) {
+        cur += line.slice(i);
+        break;
+      }
+      cur += line.slice(i, end + 1);
+      i = end;
+      continue;
+    }
+    const two = line.slice(i, i + 2);
+    if (two === '&&' || two === '||' || (c === ';' && two !== ';;')) {
+      out.push({ text: cur, op });
+      op = c === ';' ? ';' : (two as '&&' | '||');
+      cur = '';
+      if (c !== ';') i++;
+      continue;
+    }
+    cur += c;
+  }
+  if (cur.trim() || out.length === 0) out.push({ text: cur, op });
+  return out.filter((x, idx) => x.text.trim() || idx === 0);
 }

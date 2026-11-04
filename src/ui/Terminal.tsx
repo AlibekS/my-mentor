@@ -1,4 +1,5 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { FsErr, errText } from '../shell/vfs';
 import { Terminal as XTerm } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
@@ -35,6 +36,8 @@ export function Terminal({ shell, onExec, banner, autoFocus }: Props) {
   const onExecRef = useRef(onExec);
   onExecRef.current = onExec;
   const bannerRef = useRef(banner);
+  const [editing, setEditing] = useState<{ path: string; text: string } | null>(null);
+  const termApi = useRef<{ write: (s: string) => void; prompt: () => void; focus: () => void } | null>(null);
 
   useEffect(() => {
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -90,6 +93,10 @@ export function Terminal({ shell, onExec, banner, autoFocus }: Props) {
       hIdx = -1;
       if (line.trim()) {
         const out = shell.run(line);
+        if (out.editFile) {
+          const node = shell.fs.lookup(out.editFile);
+          setEditing({ path: out.editFile, text: node && node.type === 'file' ? node.content : '' });
+        }
         if (out.clear) term.clear();
         else if (out.output) term.write(out.output.replace(/\n/g, '\r\n'));
         const rec = shell.log[shell.log.length - 1];
@@ -227,6 +234,11 @@ export function Terminal({ shell, onExec, banner, autoFocus }: Props) {
       cur += printable.length;
       redraw();
     });
+    termApi.current = {
+      write: (s2: string) => term.write(s2),
+      prompt: () => term.write('\r\x1b[K' + colorPrompt()),
+      focus: () => term.focus(),
+    };
     if (autoFocus) term.focus();
     return () => {
       disposed = true;
@@ -237,5 +249,61 @@ export function Terminal({ shell, onExec, banner, autoFocus }: Props) {
     };
   }, [shell, autoFocus]);
 
-  return <div className="terminal-host" ref={host} role="region" aria-label="Эмулятор терминала. Введите команду и нажмите Enter." />;
+  const close = (save: boolean) => {
+    if (!editing) return;
+    let msg = '';
+    if (save) {
+      try {
+        shell.fs.write(editing.path, editing.text.endsWith('\n') || !editing.text ? editing.text : editing.text + '\n', shell.state.user);
+        msg = `\x1b[2m[ Сохранено: ${editing.path} ]\x1b[0m`;
+      } catch (e) {
+        msg = `\x1b[31m[ Не удалось сохранить: ${e instanceof FsErr ? errText[e.code] : String(e)} ]\x1b[0m`;
+      }
+    } else msg = '\x1b[2m[ Изменения не сохранены ]\x1b[0m';
+    termApi.current?.write('\r\x1b[K' + msg + '\r\n');
+    termApi.current?.prompt();
+    setEditing(null);
+    setTimeout(() => termApi.current?.focus(), 0);
+  };
+
+  return (
+    <div className="terminal-wrap">
+      <div className="terminal-host" ref={host} role="region" aria-label="Эмулятор терминала. Введите команду и нажмите Enter." />
+      {editing && (
+        <div className="editor-overlay" role="dialog" aria-modal="true" aria-label={`Редактор ${editing.path}`}>
+          <div className="editor-bar">
+            <span className="mono">nano {editing.path}</span>
+            <span className="muted small">Ctrl+S — сохранить и выйти · Esc — выйти без сохранения</span>
+          </div>
+          <textarea
+            className="editor-area mono"
+            value={editing.text}
+            autoFocus
+            spellCheck={false}
+            onChange={(e) => setEditing({ ...editing, text: e.target.value })}
+            onKeyDown={(e) => {
+              if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'o' || e.key === 'ы')) {
+                e.preventDefault();
+                close(true);
+              } else if (e.key === 'Escape' || ((e.ctrlKey || e.metaKey) && e.key === 'x')) {
+                e.preventDefault();
+                close(false);
+              } else if (e.key === 'Tab') {
+                e.preventDefault();
+                const t = e.currentTarget;
+                const p = t.selectionStart;
+                const v = editing.text.slice(0, p) + '  ' + editing.text.slice(t.selectionEnd);
+                setEditing({ ...editing, text: v });
+                requestAnimationFrame(() => t.setSelectionRange(p + 2, p + 2));
+              }
+            }}
+          />
+          <div className="editor-actions">
+            <button className="btn primary small" onClick={() => close(true)}>Сохранить (Ctrl+S)</button>
+            <button className="btn ghost small" onClick={() => close(false)}>Выйти без сохранения (Esc)</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
