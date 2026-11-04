@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { lessonByKey, moduleById } from '../content';
-import type { Question, Task } from '../content/types';
+import { taskTool, type Question, type Task, type Tool } from '../content/types';
 import { evaluate } from '../engine/checks';
 import { checkAnswer } from '../engine/normalize';
 import { completeReview, recordCommand } from '../game/actions';
@@ -55,7 +55,7 @@ export function Review() {
           {item.kind === 'question' ? (
             <ReviewQuestion key={item.key} q={lesson.quiz.find((x) => x.id === item.itemId)} dataset={lesson.sql?.dataset} obs={lesson.obs} onDone={finish} />
           ) : (
-            <ReviewTask key={item.key} task={lesson.tasks.find((t) => t.id === item.itemId)} scenario={lesson.scenario} dataset={lesson.sql?.dataset} obs={lesson.obs} moduleId={lesson.moduleId} onDone={finish} />
+            <ReviewTask key={item.key} task={lesson.tasks.find((t) => t.id === item.itemId)} scenario={lesson.scenario} dataset={lesson.sql?.dataset} obs={lesson.obs} tool={lesson.tasks.find((t) => t.id === item.itemId) ? taskTool(lesson, lesson.tasks.find((t) => t.id === item.itemId)!) : 'terminal'} moduleId={lesson.moduleId} onDone={finish} />
           )}
         </div>
       )}
@@ -69,7 +69,7 @@ function ReviewQuestion({ q, onDone, dataset, obs }: { q?: Question; onDone: (ok
   return <QuestionCard q={q} dataset={dataset} obs={obs} maxAttempts={1} onAttempt={(r) => setOk(r)} onNext={() => onDone(ok)} />;
 }
 
-function ReviewTask({ task, scenario, moduleId, onDone, dataset, obs }: { task?: Task; scenario: object; moduleId: string; onDone: (ok: boolean) => void; dataset?: string; obs?: ObsDataset }) {
+function ReviewTask({ task, scenario, moduleId, onDone, dataset, obs, tool }: { task?: Task; scenario: object; moduleId: string; onDone: (ok: boolean) => void; dataset?: string; obs?: ObsDataset; tool: Tool }) {
   const { update } = useStore();
   const shell = useMemo(() => new Shell(task?.scenario ?? scenario), [task, scenario]);
   const [solved, setSolved] = useState(false);
@@ -97,7 +97,7 @@ function ReviewTask({ task, scenario, moduleId, onDone, dataset, obs }: { task?:
           <button className="btn ghost small" onClick={() => onDone(false)}>Не помню — повторить позже</button>
         </div>
       )}
-      {obs ? (
+      {tool === 'obs' && obs ? (
         <ObsConsole
           ds={obs}
           onQuery={(kind, q) => {
@@ -106,7 +106,7 @@ function ReviewTask({ task, scenario, moduleId, onDone, dataset, obs }: { task?:
             if (kind === 'logs' && searchLogs(obs.logs ?? [], q).hits.length === searchLogs(obs.logs ?? [], task.solution).hits.length) setSolved(true);
           }}
         />
-      ) : dataset ? (
+      ) : tool === 'sql' && dataset ? (
         <SqlConsole
           dataset={dataset}
           onRun={async (q) => {

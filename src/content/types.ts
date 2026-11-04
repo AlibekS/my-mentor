@@ -69,7 +69,11 @@ export interface Task {
   obs?: 'promql' | 'logs';
   /** Письменное задание: текст проверяется по чек-листу обязательных элементов (solution — пример) */
   write?: WriteSpec;
+  /** В уроке с несколькими инструментами — какой открыть для задания (и где проверять solution) */
+  tool?: Tool;
 }
+
+export type Tool = 'terminal' | 'sql' | 'obs';
 
 export interface RubricItem {
   /** что должно быть в тексте (показывается в чек-листе) */
@@ -158,6 +162,8 @@ export interface LessonDef {
   sql?: { dataset: string };
   /** Урок наблюдаемости: вместо терминала — консоль метрик/логов/трейсов */
   obs?: ObsDataset;
+  /** Несколько инструментов в одном уроке (вкладки справа), например ['terminal', 'sql', 'obs'] */
+  tools?: Tool[];
   tasks: Task[];
   quiz: Question[];
   glossary?: GlossaryItem[];
@@ -225,4 +231,19 @@ export interface PlacementQuestion {
 export interface PlacementTopic {
   moduleId: string;
   questions: PlacementQuestion[];
+}
+
+/** Инструменты урока */
+export function lessonTools(l: Pick<LessonDef, 'tools' | 'sql' | 'obs'>): Tool[] {
+  if (l.tools?.length) return l.tools;
+  if (l.obs) return ['obs'];
+  if (l.sql) return ['sql'];
+  return ['terminal'];
+}
+
+/** Инструмент, в котором решается (и проверяется) задание */
+export function taskTool(l: Pick<LessonDef, 'tools' | 'sql' | 'obs'>, t: Task): Tool {
+  if (t.tool) return t.tool;
+  if (t.obs) return 'obs';
+  return lessonTools(l)[0];
 }

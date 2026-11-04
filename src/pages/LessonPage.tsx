@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { lessonByKey, moduleById } from '../content';
-import type { Lesson, Module, Task } from '../content/types';
+import { lessonTools, taskTool, type Lesson, type Module, type Task, type Tool } from '../content/types';
 import { evaluate } from '../engine/checks';
 import { checkAnswer } from '../engine/normalize';
 import { answerQuestion, completeLesson, ensureLesson, giveUpQuestion, recordCommand, showSolution, solveTask, useHint } from '../game/actions';
@@ -154,16 +154,44 @@ function TheoryStep({ module, lesson, base }: { module: Module; lesson: Lesson; 
         </section>
         <section className={`pane term ${tab === 'term' ? 'show' : ''}`}>
           <div className="term-title">Песочница — пробуй {lesson.sql ? 'запросы' : 'команды'} из теории. Здесь ничего не проверяется.</div>
-          {lesson.obs ? (
-            <ObsConsole ds={lesson.obs} onQuery={(kind, q, sum) => update((p) => recordCommand(p, obsRecord(kind, q, sum), module.id))} />
-          ) : lesson.sql ? (
-            <SqlConsole dataset={lesson.sql.dataset} onRun={(q, r) => update((p) => recordCommand(p, sqlRecord(q, r), module.id))} />
-          ) : (
-            <Terminal shell={shell} banner={'\x1b[2mПесочница урока. help — список команд, man <команда> — справка.\x1b[0m'} onExec={(rec) => update((p) => recordCommand(p, rec, module.id))} />
-          )}
+          <ToolPanes
+            lesson={lesson}
+            active={lessonTools(lesson)[0]}
+            terminal={<Terminal shell={shell} banner={'\x1b[2mПесочница урока. help — список команд, man <команда> — справка.\x1b[0m'} onExec={(rec) => update((p) => recordCommand(p, rec, module.id))} />}
+            sql={lesson.sql && <SqlConsole dataset={lesson.sql.dataset} onRun={(q, r) => update((p) => recordCommand(p, sqlRecord(q, r), module.id))} />}
+            obs={lesson.obs && <ObsConsole ds={lesson.obs} onQuery={(kind, q, sum) => update((p) => recordCommand(p, obsRecord(kind, q, sum), module.id))} />}
+          />
         </section>
       </div>
     </>
+  );
+}
+
+const TOOL_LABEL: Record<Tool, string> = { terminal: '⌨ Терминал', sql: '🗄 SQL', obs: '🔭 Наблюдаемость' };
+
+/** Правая панель урока: один или несколько инструментов (вкладки). Все остаются смонтированными — состояние не теряется. */
+function ToolPanes({ lesson, active, terminal, sql, obs }: { lesson: Lesson; active: Tool; terminal: React.ReactNode; sql?: React.ReactNode; obs?: React.ReactNode }) {
+  const tools = lessonTools(lesson);
+  const [cur, setCur] = useState<Tool>(active);
+  useEffect(() => setCur(active), [active]);
+  const node = { terminal, sql, obs };
+  if (tools.length === 1) return <>{node[tools[0]]}</>;
+  return (
+    <div className="tool-panes">
+      <div className="obs-tabs" role="tablist" aria-label="Инструменты">
+        {tools.map((t) => (
+          <button key={t} role="tab" aria-selected={cur === t} className={cur === t ? 'active' : ''} onClick={() => setCur(t)}>
+            {TOOL_LABEL[t]}
+            {t === active && cur !== t ? ' •' : ''}
+          </button>
+        ))}
+      </div>
+      {tools.map((t) => (
+        <div key={t} className="tool-pane" hidden={cur !== t}>
+          {node[t]}
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -239,7 +267,7 @@ function PracticeStep({ module, lesson, base }: { module: Module; lesson: Lesson
     termLog.current.push(rec);
     mentorContext.set((c) => ({ ...c, terminal: termLog.current.slice(-8).map((x) => ({ line: x.line, output: (x.stdout + x.stderr).slice(0, 800), exitCode: x.exitCode })) }));
     update((p) => recordCommand(p, rec, module.id));
-    if (tp?.solved || task.answer || !lesson.sql) return;
+    if (tp?.solved || task.answer || !lesson.sql || taskTool(lesson, task) !== 'sql') return;
     const g = await gradeSql(lesson.sql.dataset, query, task.solution, task.sqlOrdered);
     if (g.ok) {
       setSqlFeedback(null);
@@ -353,13 +381,13 @@ function PracticeStep({ module, lesson, base }: { module: Module; lesson: Lesson
             )}
           </div>
           {sqlFeedback && !tp?.solved && <p className="feedback bad small" role="status">Пока не совпадает с ожидаемым: {sqlFeedback}</p>}
-          {lesson.obs ? (
-            <ObsConsole key={resetN} ds={lesson.obs} onQuery={onObs} />
-          ) : lesson.sql ? (
-            <SqlConsole dataset={lesson.sql.dataset} onRun={onSql} resetKey={resetN} />
-          ) : (
-          <Terminal key={`${envKey}-${resetN}`} shell={shell} onExec={onExec} autoFocus banner={`\x1b[2m${lesson.kind === 'boss' ? 'Инцидент в процессе — действуй как L3.' : 'Окружение урока.'} help — список команд, man <команда> — справка.\x1b[0m`} />
-          )}
+          <ToolPanes
+            lesson={lesson}
+            active={taskTool(lesson, task)}
+            terminal={<Terminal key={`${envKey}-${resetN}`} shell={shell} onExec={onExec} autoFocus banner={`\x1b[2m${lesson.kind === 'boss' ? 'Инцидент в процессе — действуй как L3.' : 'Окружение урока.'} help — список команд, man <команда> — справка.\x1b[0m`} />}
+            sql={lesson.sql && <SqlConsole dataset={lesson.sql.dataset} onRun={onSql} resetKey={resetN} />}
+            obs={lesson.obs && <ObsConsole key={resetN} ds={lesson.obs} onQuery={onObs} />}
+          />
         </section>
       </div>
     </>

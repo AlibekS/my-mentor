@@ -77,15 +77,32 @@ export function Terminal({ shell, onExec, banner, autoFocus }: Props) {
       const m = /^(.*?@.*?):(.*)([$#] )$/.exec(p);
       return m ? `\x1b[1;32m${m[1]}\x1b[0m:\x1b[1;34m${m[2]}\x1b[0m${m[3]}` : p;
     };
+    // строка ввода может переноситься на несколько экранных строк — помним, на какой строке курсор
+    let cursorRow = 0;
+    const visLen = (x: string) => x.replace(/\x1b\[[0-9;]*m/g, '').length;
     const redraw = () => {
-      term.write('\r\x1b[K' + colorPrompt() + buf);
-      const back = buf.length - cur;
-      if (back > 0) term.write(`\x1b[${back}D`);
+      const cols = Math.max(10, term.cols);
+      const p = colorPrompt();
+      if (cursorRow > 0) term.write(`\x1b[${cursorRow}A`);
+      term.write('\r\x1b[J' + p + buf);
+      const plen = visLen(p);
+      const endPos = plen + buf.length;
+      const pos = plen + cur;
+      // xterm переносит строку лениво: при endPos кратном cols курсор остаётся в конце строки
+      const endRow = endPos > 0 && endPos % cols === 0 ? endPos / cols - 1 : Math.floor(endPos / cols);
+      const row = Math.floor(pos / cols);
+      const col = pos % cols;
+      if (endRow > row) term.write(`\x1b[${endRow - row}A`);
+      term.write(`\x1b[${col + 1}G`);
+      cursorRow = row;
     };
     if (bannerRef.current) term.writeln(bannerRef.current);
     term.write(colorPrompt());
 
     const exec = () => {
+      cur = buf.length;
+      redraw();
+      cursorRow = 0;
       term.write('\r\n');
       const line = buf;
       buf = '';
@@ -125,6 +142,11 @@ export function Terminal({ shell, onExec, banner, autoFocus }: Props) {
         redraw();
         return;
       }
+      const keep = cur;
+      cur = buf.length;
+      redraw();
+      cur = keep;
+      cursorRow = 0;
       term.write('\r\n' + options.map((o) => o.replace(/.*\/(?=.)/, '')).join('  ') + '\r\n');
       redraw();
     };
@@ -164,6 +186,9 @@ export function Terminal({ shell, onExec, banner, autoFocus }: Props) {
           complete();
           return;
         case '\x03': // Ctrl+C
+          cur = buf.length;
+          redraw();
+          cursorRow = 0;
           term.write('^C\r\n');
           buf = '';
           cur = 0;
@@ -171,6 +196,7 @@ export function Terminal({ shell, onExec, banner, autoFocus }: Props) {
           return;
         case '\x0c': // Ctrl+L
           term.clear();
+          cursorRow = 0;
           redraw();
           return;
         case '\x01':
@@ -217,13 +243,13 @@ export function Terminal({ shell, onExec, banner, autoFocus }: Props) {
         case '\x1b[D':
           if (cur > 0) {
             cur--;
-            term.write(data);
+            redraw();
           }
           return;
         case '\x1b[C':
           if (cur < buf.length) {
             cur++;
-            term.write(data);
+            redraw();
           }
           return;
       }
@@ -236,7 +262,10 @@ export function Terminal({ shell, onExec, banner, autoFocus }: Props) {
     });
     termApi.current = {
       write: (s2: string) => term.write(s2),
-      prompt: () => term.write('\r\x1b[K' + colorPrompt()),
+      prompt: () => {
+        cursorRow = 0;
+        term.write('\r\x1b[K' + colorPrompt());
+      },
       focus: () => term.focus(),
     };
     if (autoFocus) term.focus();

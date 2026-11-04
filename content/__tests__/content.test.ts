@@ -9,6 +9,7 @@ import { gradeSql, openDb, runQuery, resultText } from '../../src/sql/engine';
 import { evalQuery, sameResult } from '../../src/obs/promql';
 import { searchLogs } from '../../src/obs/kql';
 import { checkRubric } from '../../src/engine/rubric';
+import { taskTool } from '../../src/content/types';
 
 /**
  * Проверка целостности контента: эталонные решения проходят собственные проверки.
@@ -51,7 +52,7 @@ describe('content integrity', () => {
             });
             continue;
           }
-          if (l.obs) {
+          if (l.obs && taskTool(l, t) === 'obs') {
             it(`${l.id}/${t.id}: observability task is solvable`, () => {
               expect(t.hints.length).toBeLessThanOrEqual(3);
               expect(t.answer || t.obs, 'obs task needs answer or obs check').toBeTruthy();
@@ -69,7 +70,7 @@ describe('content integrity', () => {
             });
             continue;
           }
-          if (l.sql) {
+          if (l.sql && taskTool(l, t) === 'sql') {
             it(`${l.id}/${t.id}: SQL solution runs and grades`, async () => {
               expect(t.hints.length).toBeLessThanOrEqual(3);
               const db = await openDb(l.sql!.dataset);
