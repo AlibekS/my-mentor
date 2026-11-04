@@ -32,6 +32,8 @@ export interface ListItem {
 
 export class ParseError extends Error {}
 
+export const EXIT_PLACEHOLDER = '\u0001?\u0001';
+
 type Tok = { kind: 'word'; word: Word } | { kind: 'op'; op: string };
 
 export function tokenize(line: string, env: Record<string, string>): Tok[] {
@@ -59,7 +61,8 @@ export function tokenize(line: string, env: Record<string, string>): Tok[] {
     }
     if (line[i] === '?') {
       i++;
-      return env['?'] ?? '0';
+      // подставляется в момент выполнения команды (см. Shell.runSimple)
+      return EXIT_PLACEHOLDER;
     }
     const m = /^[A-Za-z_][A-Za-z0-9_]*/.exec(line.slice(i));
     if (!m) return '$';

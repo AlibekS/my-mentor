@@ -68,10 +68,10 @@ const systemctl: CommandDef = {
   run(args, _s, ctx) {
     const pos = args.filter((x) => !x.startsWith('-'));
     const [action, name] = pos;
-    if (!action) {
+    if (!action && !args.includes('--failed')) {
       return ok(joinLines(ctx.state.services.map((s) => `  ${(s.name + '.service').padEnd(28)} loaded ${s.active.padEnd(8)} ${s.active === 'active' ? 'running' : s.active === 'failed' ? 'failed ' : 'dead   '} ${s.description}`)));
     }
-    if (action === 'list-units' || action === '--failed') {
+    if (action === 'list-units' || args.includes('--failed')) {
       const list = args.includes('--failed') || args.includes('--state=failed') ? ctx.state.services.filter((s) => s.active === 'failed') : ctx.state.services;
       const head = '  UNIT                         LOAD   ACTIVE   SUB     DESCRIPTION\n';
       return ok(head + joinLines(list.map((s) => `${s.active === 'failed' ? '●' : ' '} ${(s.name + '.service').padEnd(28)} loaded ${s.active.padEnd(8)} ${s.active === 'active' ? 'running' : s.active === 'failed' ? 'failed ' : 'dead   '} ${s.description}`)) + `\n${list.length} loaded units listed.\n`);
@@ -155,7 +155,7 @@ const journalctl: CommandDef = {
       else if (a === '--until' || a === '-U') until = args[++i];
       else if (a === '-p' || a === '--priority') prio = args[++i];
       else if (a.startsWith('-p') && a.length > 2) prio = a.slice(2);
-      else if (/^-[xefr]+$/.test(a) || a === '--no-pager') continue;
+      else if (/^-[xefrb]+$/.test(a) || a === '--no-pager') continue;
       else if (/^-[a-z]*u$/.test(a)) unit = args[++i]; // -xeu nginx
       else return fail(`journalctl: unrecognized option '${a}'`);
     }

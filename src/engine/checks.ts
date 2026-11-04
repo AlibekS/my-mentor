@@ -7,7 +7,9 @@ const arr = (v: string | string[]) => (Array.isArray(v) ? v : [v]);
 const squash = (s: string) => s.replace(/[ \t]+/g, ' ').trim();
 
 /** Оценить проверку по текущему состоянию оболочки и последней выполненной строке */
-export function evaluate(check: Check, shell: Shell, last: ExecRecord | undefined = shell.log[shell.log.length - 1]): boolean {
+export function evaluate(check: Check, shell: Shell, lastArg: ExecRecord | null | undefined = shell.log[shell.log.length - 1]): boolean {
+  // null — «оценить только состояние, без последней команды»
+  const last = lastArg ?? undefined;
   const out = last?.stdout ?? '';
   switch (check.type) {
     case 'outputContains': {
@@ -58,9 +60,9 @@ export function evaluate(check: Check, shell: Shell, last: ExecRecord | undefine
     case 'custom':
       return check.fn(shell, last);
     case 'all':
-      return check.checks.every((c) => evaluate(c, shell, last));
+      return check.checks.every((c) => evaluate(c, shell, lastArg));
     case 'any':
-      return check.checks.some((c) => evaluate(c, shell, last));
+      return check.checks.some((c) => evaluate(c, shell, lastArg));
   }
 }
 

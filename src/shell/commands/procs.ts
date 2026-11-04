@@ -10,8 +10,15 @@ const ps: CommandDef = {
   summary: 'список процессов. ps aux — все процессы с CPU/памятью; ps -ef — другой формат',
   usage: 'ps aux | ps -ef',
   run(args, _s, ctx) {
-    const procs = ctx.state.processes;
-    const a = args.join(' ');
+    let procs = [...ctx.state.processes];
+    const sortArg = args.find((x) => x.startsWith('--sort='))?.slice(7);
+    if (sortArg) {
+      const desc = sortArg.startsWith('-');
+      const key = sortArg.replace(/^[-+]/, '');
+      const val = (p: Proc) => (key === '%cpu' || key === 'pcpu' ? p.cpu : key === '%mem' || key === 'pmem' ? p.mem : key === 'rss' ? p.rss : key === 'pid' ? p.pid : 0);
+      procs.sort((x, y) => (desc ? val(y) - val(x) : val(x) - val(y)));
+    }
+    const a = args.filter((x) => !x.startsWith('--sort')).join(' ');
     if (/aux|-e|ax/.test(a)) {
       if (/-ef|-e\s*-f/.test(a)) {
         return ok(
@@ -99,10 +106,11 @@ const pgrep: CommandDef = {
   run(args, _s, ctx) {
     const pat = args.filter((x) => !x.startsWith('-'))[0];
     if (!pat) return fail('pgrep: no matching criteria specified', 2);
+    const fl = args.filter((x) => x.startsWith('-')).join('');
     const re = new RegExp(pat);
-    const m = ctx.state.processes.filter((p) => re.test(p.command.split(' ')[0].split('/').pop()!) || (args.includes('-f') && re.test(p.command)));
+    const m = ctx.state.processes.filter((p) => re.test(p.command.split(/[\s:]/)[0].split('/').pop()!) || (fl.includes('f') && re.test(p.command)));
     if (!m.length) return { stdout: '', stderr: '', exitCode: 1 };
-    return ok(joinLines(m.map((p) => (args.includes('-a') ? `${p.pid} ${p.command}` : String(p.pid)))));
+    return ok(joinLines(m.map((p) => (fl.includes('a') || fl.includes('l') ? `${p.pid} ${fl.includes('a') ? p.command : p.command.split(' ')[0]}` : String(p.pid)))));
   },
 };
 

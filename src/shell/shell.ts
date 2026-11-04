@@ -1,5 +1,5 @@
 import { VFS, FsErr, errText, normalizePath, dirname, basename } from './vfs';
-import { parse, ParseError, globToRegExp, type SimpleCommand, type Word } from './parser';
+import { parse, ParseError, globToRegExp, EXIT_PLACEHOLDER, type SimpleCommand, type Word } from './parser';
 import type { CommandContext, CommandDef, CommandResult, ExecRecord, Scenario, SystemState } from './types';
 import { BASE_DIRS, BASE_FILES, DEFAULT_HOST, DEFAULT_NETWORK, DEFAULT_RESOURCES, DEFAULT_USER, SIM_NOW } from './defaults';
 import { registry as defaultRegistry } from './registry';
@@ -164,7 +164,7 @@ export class Shell {
 
   private runSimple(cmd: SimpleCommand, stdin: string): { stdout: string; stderr: string; exitCode: number } {
     // присваивания VAR=value (только без команды)
-    const words = cmd.words.flatMap((w) => this.expandWord(w));
+    const words = cmd.words.flatMap((w) => this.expandWord(w)).map((w) => w.split(EXIT_PLACEHOLDER).join(this.env['?'] ?? '0'));
     if (words.length && words.every((w) => /^[A-Za-z_][A-Za-z0-9_]*=/.test(w))) {
       for (const w of words) {
         const i = w.indexOf('=');
@@ -256,6 +256,7 @@ export class Shell {
       }
       output += lastOut;
       allOut += lastOut;
+      this.env['?'] = String(exitCode);
     }
     this.env['?'] = String(exitCode);
     this.log.push({ line: trimmed, commands: names, pipes, stdout: stripAnsi(allOut), stderr: stripAnsi(allErr), exitCode });

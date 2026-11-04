@@ -3,11 +3,12 @@ import type { PlacementTopic } from '../../src/content/types';
 const t: PlacementTopic = {
   moduleId: '04-processes',
   questions: [
-    { id: 'pl-proc-1', difficulty: 1, prompt: 'Какой командой посмотреть статус systemd-сервиса `nginx`? (команда целиком)', answer: { accept: ['systemctl status nginx', 'sudo systemctl status nginx', 'systemctl status nginx.service'], normalize: 'exact' } },
-    { id: 'pl-proc-2', difficulty: 2, prompt: 'Какой сигнал посылает `kill -9`? (имя сигнала)', answer: { accept: ['SIGKILL', 'KILL'] } },
+    { id: 'pl-proc-1', difficulty: 1, lessons: ['systemd'], prompt: 'Какой командой посмотреть статус systemd-сервиса `nginx`? (команда целиком)', answer: { accept: ['systemctl status nginx', 'sudo systemctl status nginx', 'systemctl status nginx.service'], normalize: 'exact' } },
+    { id: 'pl-proc-2', difficulty: 2, lessons: ['signals'], prompt: 'Какой сигнал посылает `kill -9`? (имя сигнала)', answer: { accept: ['SIGKILL', 'KILL'] } },
     {
       id: 'pl-proc-3',
       difficulty: 3,
+      lessons: ['ps-top'],
       prompt: 'nginx не стартует: порт 8080 занят. Найди процесс, который занял порт **8080**, и введи его PID.',
       scenario: {
         processes: [
@@ -22,7 +23,7 @@ const t: PlacementTopic = {
       },
       answer: { accept: ['4242'], normalize: 'number' },
     },
-    { id: 'pl-proc-4', difficulty: 3, prompt: 'Какой командой посмотреть логи сервиса `app` только за последний час? (journalctl с опциями)', answer: { accept: ['journalctl -u app --since "1 hour ago"', "journalctl -u app --since '1 hour ago'", 'journalctl -u app --since "-1h"', 'journalctl -u app -S "1 hour ago"', 'journalctl --since "1 hour ago" -u app'], normalize: 'exact' } },
+    { id: 'pl-proc-4', difficulty: 3, lessons: ['journal-exit'], prompt: 'Какой командой посмотреть логи сервиса `app` только за последний час? (journalctl с опциями)', answer: { accept: ['journalctl -u app --since "1 hour ago"', "journalctl -u app --since '1 hour ago'", 'journalctl -u app --since "-1h"', 'journalctl -u app -S "1 hour ago"', 'journalctl --since "1 hour ago" -u app'], normalize: 'exact' } },
   ],
 };
 export default t;

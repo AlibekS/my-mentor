@@ -169,6 +169,11 @@ function PracticeStep({ module, lesson, base }: { module: Module; lesson: Lesson
     setAnswerState('idle');
   }, [task, resetN]);
 
+  // общее окружение: если нужное состояние уже достигнуто раньше (например, сервис поднят) — засчитываем
+  useEffect(() => {
+    if (task && !tp?.solved && task.check && !task.answer && evaluate(task.check, shell, null)) solve([]);
+  }, [task?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // контекст для ментора
   useEffect(() => {
     if (!task) return;

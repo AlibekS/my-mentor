@@ -26,6 +26,6 @@
   "reviewedAt": "2026-11-04",
   "demand": "stable",
   "marketNote": "systemd и диагностика сервисов нужны везде, где есть VM/bare-metal; в Kubernetes-окружениях часть навыков переходит на kubectl.",
-  "status": "planned",
+  "status": "ready",
   "estimatedMinutes": 150
 }
