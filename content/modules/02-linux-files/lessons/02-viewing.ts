@@ -1,9 +1,10 @@
 import type { LessonDef } from '../../../../src/content/types';
 
 const lines: string[] = [];
+// раз в минуту с 10:31 до 14:30 — как раз до рестарта (поток tail -f начинается в 14:30:01)
 for (let i = 1; i <= 240; i++) {
-  const h = 9 + Math.floor((i * 3) / 60);
-  const m = (i * 3) % 60;
+  const h = Math.floor((10 * 60 + 30 + i) / 60);
+  const m = (10 * 60 + 30 + i) % 60;
   const lvl = i === 237 ? 'ERROR' : i % 37 === 0 ? 'WARN ' : 'INFO ';
   const msg = i === 237 ? 'Connection to db-prod-01:5432 refused' : i % 37 === 0 ? 'slow query 1200ms' : `processed order #${5000 + i}`;
   lines.push(`2026-11-04 ${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00 ${lvl} ${msg}`);
@@ -40,7 +41,16 @@ const lesson: LessonDef = {
     {
       id: 'count',
       prompt: 'Сколько строк в логе? Выведи число командой.',
-      check: { type: 'outputNumber', value: 240 },
+      // после tail -f в файл дописываются строки потока — засчитываем текущее число строк файла
+      check: {
+        type: 'custom',
+        fn: (sh, last) => {
+          const f = sh.fs.lookup('/var/log/shop/app.log');
+          if (!last || !f || f.type !== 'file') return false;
+          const m = /^(?:\S+:)?\s*(\d+)(?:\s+\S+)?$/.exec(last.stdout.trim());
+          return !!m && parseInt(m[1], 10) === f.content.split('\n').filter((l) => l !== '').length;
+        },
+      },
       hints: ['`wc -l` считает строки.'],
       solution: 'wc -l /var/log/shop/app.log',
     },

@@ -85,9 +85,40 @@ for (let d = 1; d <= 4; d++) {
   }
 }
 
+// id заказов и позиций — по времени создания, как автоинкремент в настоящей БД
+// («последние заказы» можно искать и по ORDER BY id DESC)
+{
+  const remap = new Map([...orders].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id - b.id).map((o, i) => [o.id, 1001 + i]));
+  for (const o of orders) o.id = remap.get(o.id)!;
+  orders.sort((a, b) => a.id - b.id);
+  for (const it of items) it.order_id = remap.get(it.order_id)!;
+  items.sort((a, b) => a.order_id - b.order_id || a.id - b.id).forEach((it, i) => (it.id = i + 1));
+  for (const p of payments) {
+    p.order_id = remap.get(p.order_id)!;
+    if (p.idempotency_key) p.idempotency_key = `idem-${p.order_id}-${p.idempotency_key.split('-').pop()}`;
+  }
+}
+
+/** Известный клиент для заданий (Aigerim Seitkali, aigerim.s@mail.kz) */
+const AIGERIM = 7;
+
 // --- аномалия 1 (босс): 3 ноября 14:05–15:05 провайдер stripe отвечал таймаутом, сервис повторял списание без ключа идемпотентности
 export const DUP_WINDOW = { from: ts(3, 14, 5), to: ts(3, 15, 5) };
-for (const o of orders.filter((o) => o.created_at >= DUP_WINDOW.from && o.created_at < DUP_WINDOW.to)) {
+const inDupWindow = (o: Order) => o.created_at >= DUP_WINDOW.from && o.created_at < DUP_WINDOW.to;
+// клиент из тикета №1 тоже оплачивал заказ в окне инцидента — на нём проблема подтверждается
+{
+  let o = orders.find((x) => x.customer_id === AIGERIM && inDupWindow(x));
+  if (!o) {
+    o = orders.find(inDupWindow)!;
+    o.customer_id = AIGERIM;
+  }
+  const order = o;
+  if (!payments.some((p) => p.order_id === order.id && p.status === 'succeeded')) {
+    order.status = 'paid';
+    payments.push({ id: payId++, order_id: order.id, provider: 'stripe', status: 'succeeded', amount: order.total, idempotency_key: `idem-${order.id}-1`, created_at: order.created_at });
+  }
+}
+for (const o of orders.filter(inDupWindow)) {
   const ps = payments.filter((p) => p.order_id === o.id && p.status === 'succeeded');
   if (!ps.length) continue;
   ps[0].provider = 'stripe';
@@ -109,16 +140,29 @@ payments.push({ id: payId++, order_id: 99001, provider: 'kaspi', status: 'succee
 payments.push({ id: payId++, order_id: 99002, provider: 'kaspi', status: 'succeeded', amount: 12.5, idempotency_key: 'idem-99002-1', created_at: ts(2, 11, 9) });
 
 payments.sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id - b.id);
+// id платежей тоже по времени
+payments.forEach((p, i) => (p.id = i + 1));
 
+// --- заказы с повторным успешным списанием (для тикетов и ответов)
+const succeeded = payments.filter((p) => p.status === 'succeeded');
+const byOrder = new Map<number, Payment[]>();
+for (const p of succeeded) byOrder.set(p.order_id, [...(byOrder.get(p.order_id) ?? []), p]);
+const dupOrders = [...byOrder.entries()].filter(([, ps]) => ps.length > 1);
+const orderById = new Map(orders.map((o) => [o.id, o]));
+const dupCustomerIds = [...new Set(dupOrders.map(([oid]) => orderById.get(oid)!.customer_id))].filter((c) => c !== AIGERIM);
+
+// Тикеты согласованы с данными: жалобы на двойное списание — от клиентов с дублями,
+// «оплачен, но висит» — от владельца зависшего заказа, «сумма меньше» — от владельца заказа с расхождением.
+const ticket = (id: number, cust: number, subject: string, priority: string, status: string, created: string) => [id, cust, subject, priority, status, created] as const;
 export const tickets = [
-  [1, 7, 'Списали деньги дважды за заказ', 'P2', 'open', ts(3, 15, 2)],
-  [2, 12, 'Не приходит письмо с подтверждением', 'P3', 'closed', ts(2, 9, 40)],
-  [3, 22, 'Double charge on my card', 'P2', 'open', ts(3, 15, 30)],
-  [4, 9, 'Заказ оплачен, но висит в статусе «ожидает оплаты»', 'P3', 'open', ts(4, 13, 10)],
-  [5, 31, 'Как изменить адрес доставки?', 'P4', 'closed', ts(1, 18, 0)],
-  [6, 18, 'Charged twice, need refund', 'P2', 'open', ts(3, 16, 11)],
-  [7, 36, 'Сумма в заказе меньше, чем в корзине', 'P3', 'open', ts(4, 10, 22)],
-] as const;
+  ticket(1, AIGERIM, 'Списали деньги дважды за заказ', 'P2', 'open', ts(3, 15, 2)),
+  ticket(2, 12, 'Не приходит письмо с подтверждением', 'P3', 'closed', ts(2, 9, 40)),
+  ticket(3, dupCustomerIds[0], 'Double charge on my card', 'P2', 'open', ts(3, 15, 30)),
+  ticket(4, (stuck.find((o) => o.created_at < ts(4, 13, 10)) ?? stuck[0]).customer_id, 'Заказ оплачен, но висит в статусе «ожидает оплаты»', 'P3', 'open', ts(4, 13, 10)),
+  ticket(5, 31, 'Как изменить адрес доставки?', 'P4', 'closed', ts(1, 18, 0)),
+  ticket(6, dupCustomerIds[1] ?? dupCustomerIds[0], 'Charged twice, need refund', 'P2', 'open', ts(3, 16, 11)),
+  ticket(7, mism[0].customer_id, 'Сумма в заказе меньше, чем в корзине', 'P3', 'open', ts(4, 10, 22)),
+];
 
 function sql(): string {
   const out: string[] = [

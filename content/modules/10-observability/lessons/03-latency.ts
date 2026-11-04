@@ -19,7 +19,7 @@ const lesson: LessonDef = {
     },
     {
       id: 'p50',
-      prompt: 'Теперь **медиану (p50)** checkout — и сравни: насколько хвост хуже медианы во время инцидента?',
+      prompt: 'Теперь **медиану (p50)** checkout (окно `[5m]`) — и сравни: насколько хвост хуже медианы во время инцидента?',
       obs: 'promql',
       hints: ['Тот же запрос с `0.5`.'],
       solution: P95.replace('0.95', '0.5'),
@@ -35,7 +35,7 @@ const lesson: LessonDef = {
     },
     {
       id: 'by-service',
-      prompt: 'Построй p99 **по сервисам** (checkout и payments на одном графике).',
+      prompt: 'Построй p99 **по сервисам** (checkout и payments на одном графике), окно `[5m]`.',
       obs: 'promql',
       hints: ['Сохрани метку service: `sum by (le, service) (...)`.'],
       solution: 'histogram_quantile(0.99, sum by (le, service) (rate(http_request_duration_seconds_bucket[5m])))',
@@ -44,8 +44,8 @@ const lesson: LessonDef = {
   quiz: [
     { id: 'q-p95', type: 'text', prompt: 'p95 = 800 мс. Какая доля запросов выполняется **дольше** 800 мс? (в процентах, число)', answer: { accept: ['5'], normalize: 'number' }, explanation: '95% быстрее, 5% медленнее.' },
     { id: 'q-avg', type: 'choice', prompt: 'Почему SLO задержки формулируют через перцентиль, а не среднее?', options: ['Среднее сложно посчитать', 'Среднее скрывает «хвост» медленных запросов, которые и видят недовольные клиенты', 'Так требует Prometheus'], correct: 1, explanation: 'Перцентили показывают опыт худших N% пользователей.' },
-    { id: 'q-le', type: 'text', prompt: 'Какую метку обязательно сохранить в `sum by (…)` перед `histogram_quantile`?', answer: { accept: ['le'] }, explanation: '`le` — граница бакета.' },
-    { id: 'q-pay', type: 'promql', prompt: 'Напиши запрос p95 задержки сервиса **payments**.', solution: 'histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{service="payments"}[5m])))', explanation: 'Тот же шаблон с `{service="payments"}`.' },
+    { id: 'q-le', type: 'text', prompt: 'Какую метку обязательно сохранить в `sum by (…)` перед `histogram_quantile`?', answer: { accept: ['le', 'le (граница бакета)', 'метку le', 'метка le'] }, explanation: '`le` — граница бакета.' },
+    { id: 'q-pay', type: 'promql', prompt: 'Напиши запрос p95 задержки сервиса **payments** (окно `[5m]`).', solution: 'histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{service="payments"}[5m])))', explanation: 'Тот же шаблон с `{service="payments"}`.' },
   ],
   glossary: [
     { ru: 'Перцентиль', en: 'percentile (p95, p99)', def: 'Значение, быстрее которого выполняются N% запросов.' },

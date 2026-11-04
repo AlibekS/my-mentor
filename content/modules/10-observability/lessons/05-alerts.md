@@ -36,7 +36,7 @@
 
 ## Как это выглядит на реальной работе L3
 
-После инцидента с пулом в постмортеме action item: алерт `db_pool_connections_in_use / db_pool_connections_max > 0.9 for 2m` (severity: page) + runbook «найти, кто держит соединения: pg_stat_activity». L3 пишет выражение и проверяет его на исторических данных: сработало бы оно в 14:04?
+После инцидента с пулом в постмортеме action item: алерт `db_pool_connections_in_use / db_pool_connections_max > 0.9 for 2m` (severity: page) + runbook «найти, кто держит соединения: pg_stat_activity». L3 пишет выражение и проверяет его на исторических данных: сработало бы оно в начале инцидента, около 14:05?
 
 ## Типичные ошибки
 

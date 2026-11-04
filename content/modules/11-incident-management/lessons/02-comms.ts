@@ -1,8 +1,5 @@
 import type { LessonDef } from '../../../../src/content/types';
-import { scenario } from '../data';
-
-const UTC_TIME = ['\\d{1,2}:\\d{2}\\s?UTC', 'UTC\\s?\\d{1,2}:\\d{2}'];
-const NEXT = ['next update.{0,40}\\d{1,2}:\\d{2}', 'update.{0,30}(within|in)\\s+\\d+\\s*(min|minutes)', 'next update by'];
+import { APOLOGY, NEXT_UPDATE as NEXT, NO_CHARGE, scenario, UTC_TIME } from '../data';
 
 const lesson: LessonDef = {
   id: 'comms',
@@ -18,7 +15,7 @@ const lesson: LessonDef = {
         lang: 'en',
         minWords: 25,
         rubric: [
-          { label: 'investigating / aware', any: ['investigat', 'we are aware', 'looking into'] },
+          { label: 'investigating / aware', any: ['investigat', "we('re| are) aware", 'aware of', 'looking into'] },
           { label: 'что затронуто (payments / checkout / orders)', any: ['payment', 'checkout', 'order'] },
           { label: 'влияние на клиентов', any: ['(some|many)\\s+(customers|users)', 'unable to', 'may (fail|not)', 'cannot', "can't", 'errors?'] },
           { label: 'следующий апдейт с временем', any: NEXT },
@@ -31,7 +28,7 @@ const lesson: LessonDef = {
     {
       id: 'times',
       prompt: 'Для финального сообщения нужно окно инцидента. По `~/incident/timeline.md` введи **время окончания влияния** на клиентов (когда ошибки вернулись к норме), `ЧЧ:ММ`.',
-      answer: { accept: ['14:41'], label: 'Время UTC:' },
+      answer: { accept: [], normalize: 'keywords', keywords: [['14:41']], label: 'Время UTC:', placeholder: 'ЧЧ:ММ' },
       hints: ['`cat ~/incident/timeline.md`'],
       solution: 'grep норм ~/incident/timeline.md',
     },
@@ -45,9 +42,9 @@ const lesson: LessonDef = {
           { label: 'resolved / back to normal', any: ['resolved', 'back to normal', 'processing normally', 'fully operational'] },
           { label: 'окно: between … and … UTC', any: ['between\\s+\\d{1,2}:\\d{2}.{0,15}and\\s+\\d{1,2}:\\d{2}', 'from\\s+\\d{1,2}:\\d{2}.{0,15}(to|until)\\s+\\d{1,2}:\\d{2}'] },
           { label: 'время в UTC', any: UTC_TIME },
-          { label: 'причина простыми словами', any: ['due to', 'caused by', 'because of'] },
-          { label: 'что с заказами/деньгами', any: ['not (been )?charged', 'no (customers were )?charge', 'were not billed', 'refund'] },
-          { label: 'извинение', any: ['apologi[sz]e', 'sorry'] },
+          { label: 'причина простыми словами', any: ['due to', 'caused by', 'because\\b', '\\bcause\\b', 'triggered by', 'result of', 'related to'] },
+          { label: 'что с заказами/деньгами', any: NO_CHARGE },
+          { label: 'извинение', any: APOLOGY },
         ],
       },
       hints: ['Окно: 14:04–14:41 UTC.', 'Причина простыми словами: «a database capacity issue caused by a background job».', 'Обязательно скажи, что неуспешные оплаты не были списаны.'],

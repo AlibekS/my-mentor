@@ -44,7 +44,7 @@ const lesson: LessonDef = {
     {
       id: 'why',
       prompt: 'По журналу: какой результат (Result) systemd указывает как причину падения? Введи значение в кавычках из лога.',
-      answer: { accept: ['oom-kill', "'oom-kill'", 'oom'], label: 'Result:' },
+      answer: { accept: ['oom-kill', "'oom-kill'", 'oom', 'oom kill', 'oomkill', 'oom-killer', 'oom killer', 'result: oom-kill', 'out of memory', 'out-of-memory'], label: 'Result:' },
       hints: ['`journalctl -u report-worker -p err`'],
       solution: 'journalctl -u report-worker -p err',
       explanation: '`oom-kill` — процесс убит из-за нехватки памяти. Плюс предупреждения `heap usage 97%` перед этим — классическая утечка памяти или слишком маленький лимит.',
@@ -53,14 +53,14 @@ const lesson: LessonDef = {
     {
       id: 'exit',
       prompt: 'Проверь, активен ли `mailer`, командой `systemctl is-active`, а затем выведи **код выхода** этой проверки.',
-      check: { type: 'all', checks: [{ type: 'outputMatches', pattern: '(^|\\n)3\\n?$' }, { type: 'custom', fn: (sh) => sh.log.some((r) => /is-active\s+mailer/.test(r.line)) }] },
+      check: { type: 'all', checks: [{ type: 'outputMatches', pattern: '(^|\\D)3\\s*$' }, { type: 'custom', fn: (sh) => sh.log.some((r) => /is-active\b.*\bmailer\b/.test(r.line)) }] },
       hints: ['Код выхода последней команды — в переменной `$?`.', '`systemctl is-active mailer; echo $?` или двумя командами.'],
       solution: 'systemctl is-active mailer; echo $?',
       tags: ['systemctl'],
     },
   ],
   quiz: [
-    { id: 'q-137', type: 'text', prompt: 'Процесс завершился с кодом 137. Каким сигналом его убили? (имя или номер)', answer: { accept: ['SIGKILL', 'KILL', '9'] }, explanation: '137 − 128 = 9 → **SIGKILL**, часто от OOM killer.' },
+    { id: 'q-137', type: 'text', prompt: 'Процесс завершился с кодом 137. Каким сигналом его убили? (имя или номер)', answer: { accept: ['SIGKILL', 'KILL', '9', 'kill -9', 'SIGKILL (9)', 'SIGKILL 9', '9 (SIGKILL)'] }, explanation: '137 − 128 = 9 → **SIGKILL**, часто от OOM killer.' },
     { id: 'q-127', type: 'text', prompt: 'Какой код выхода возвращает bash, если команда не найдена?', answer: { accept: ['127'], normalize: 'number' }, explanation: '127 — command not found; 126 — найдено, но нельзя запустить.' },
     { id: 'q-follow', type: 'command', prompt: 'Выведи записи журнала сервиса `report-worker` уровня err и серьёзнее.', scenario: { services: [{ name: 'report-worker', description: 'w', active: 'active', enabled: true, logs: workerLogs }] }, solution: 'journalctl -u report-worker -p err', explanation: '`journalctl -u report-worker -p err`.' },
     { id: 'q-and', type: 'choice', prompt: 'Что выведет `false && echo A || echo B`?', options: ['A', 'B', 'A и B'], correct: 1, explanation: '`false` возвращает 1, `&&` не выполняет echo A, `||` выполняет echo B.' },

@@ -25,7 +25,8 @@ const lesson: LessonDef = {
     {
       id: 'mem',
       prompt: 'Выведи **топ-3 процесса по памяти** (с заголовком или без — главное, чтобы первым шёл самый «тяжёлый»).',
-      check: { type: 'all', checks: [{ type: 'outputMatches', pattern: '^(USER.*\\n)?\\S+\\s+4502\\s' }, { type: 'outputContains', value: '2240' }] },
+      // первая строка данных — PID 4502, вторая — 2240; не больше 5 строк (топ, а не весь список)
+      check: { type: 'custom', fn: (_sh, last) => { if (!last) return false; const rows = last.stdout.split('\n').filter((l) => l.trim() && !/^\s*(USER|UID|PID)\b/.test(l)); const pid = (r: string) => /^\s*(\d+)\s/.exec(r)?.[1] ?? /^\S+\s+(\d+)\s/.exec(r)?.[1]; return rows.length >= 2 && rows.length <= 5 && pid(rows[0]) === '4502' && pid(rows[1]) === '2240'; } },
       hints: ['Сортировка по `%mem` по убыванию.', '`ps aux --sort=-%mem | head -4` (первая строка — заголовок).'],
       solution: 'ps aux --sort=-%mem | head -4',
       tags: ['ps'],
@@ -41,7 +42,7 @@ const lesson: LessonDef = {
     {
       id: 'what',
       prompt: 'Что делает процесс, который грузит CPU? Посмотри его командную строку и введи **имя скрипта** (файл .py).',
-      answer: { accept: ['rebuild_search_index.py', '/opt/shop/scripts/rebuild_search_index.py'], label: 'Скрипт:' },
+      answer: { accept: ['rebuild_search_index.py', '/opt/shop/scripts/rebuild_search_index.py', 'rebuild_search_index'], label: 'Скрипт:' },
       hints: ['Колонка COMMAND в `ps aux` для PID 4410.', '`ps aux | grep 4410`'],
       solution: 'ps aux | grep 4410',
       explanation: 'Полная переиндексация поиска (`--full`) в разгар дня. Её стоит переносить в ночное окно — это тема для разговора с владельцем задачи, а не повод сразу убивать процесс.',
@@ -49,9 +50,9 @@ const lesson: LessonDef = {
     },
   ],
   quiz: [
-    { id: 'q-rss', type: 'text', prompt: 'Какая колонка `ps aux` показывает реально занятую процессом оперативную память? (аббревиатура)', answer: { accept: ['RSS'] }, explanation: '**RSS** (resident set size). VSZ — виртуальная, часто сильно больше и мало что говорит.' },
-    { id: 'q-d', type: 'text', prompt: 'Какой буквой в колонке STAT обозначается процесс в непрерываемом ожидании ввода-вывода (часто признак проблем с диском или NFS)?', answer: { accept: ['D'] }, explanation: '`D` — uninterruptible sleep. Много таких процессов → смотри диск/сеть, растёт load average.' },
-    { id: 'q-sort', type: 'command', prompt: 'Выведи процессы, отсортированные по CPU по убыванию (любым способом), из `ps aux`.', scenario: { processes: procs }, solution: 'ps aux --sort=-%cpu', check: { type: 'outputMatches', pattern: '^(USER.*\\n)?\\S+\\s+4410\\s' }, explanation: '`ps aux --sort=-%cpu` или `ps aux | sort -k3 -rn`.' },
+    { id: 'q-rss', type: 'text', prompt: 'Какая колонка `ps aux` показывает реально занятую процессом оперативную память? (аббревиатура)', answer: { accept: ['RSS', 'RSS (resident set size)', 'resident set size'] }, explanation: '**RSS** (resident set size). VSZ — виртуальная, часто сильно больше и мало что говорит.' },
+    { id: 'q-d', type: 'text', prompt: 'Какой буквой в колонке STAT обозначается процесс в непрерываемом ожидании ввода-вывода (часто признак проблем с диском или NFS)?', answer: { accept: ['D', 'D (uninterruptible sleep)'] }, explanation: '`D` — uninterruptible sleep. Много таких процессов → смотри диск/сеть, растёт load average.' },
+    { id: 'q-sort', type: 'command', prompt: 'Выведи процессы, отсортированные по CPU по убыванию (любым способом), из `ps aux`.', scenario: { processes: procs }, solution: 'ps aux --sort=-%cpu', check: { type: 'custom', fn: (_sh, last) => { if (!last) return false; const rows = last.stdout.split('\n').filter((l) => l.trim() && !/^\s*(USER|UID|PID)\b/.test(l)); const pid = (r: string) => /^\s*(\d+)\s/.exec(r)?.[1] ?? /^\S+\s+(\d+)\s/.exec(r)?.[1]; return rows.length >= 2 && pid(rows[0]) === '4410' && pid(rows[1]) === '2240'; } }, explanation: '`ps aux --sort=-%cpu` или `ps aux | sort -k3 -rn`.' },
     { id: 'q-wa', type: 'choice', prompt: 'В `top` строка `%Cpu(s): 5.0 us, 2.0 sy, 0.0 ni, 30.0 id, 63.0 wa`. Что это значит?', options: ['Процессор перегружен вычислениями', 'Процессы в основном ждут диск (iowait)', 'Всё в порядке, сервер простаивает'], correct: 1, explanation: '`wa` 63% — процессор простаивает в ожидании ввода-вывода. Ищи медленный диск или того, кто его грузит.' },
   ],
   glossary: [

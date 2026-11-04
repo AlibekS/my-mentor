@@ -5,10 +5,10 @@ const scenario = {
   files: {
     '/etc/passwd': 'root:x:0:0:root:/root:/bin/bash\nshop:x:998:998:Shop app:/opt/shop:/usr/sbin/nologin\nalibek:x:1000:1000:Alibek:/home/alibek:/bin/bash\n',
     '/etc/shop/app.conf': { content: 'port=8080\nworkers=4\n', mode: 0o644, mtime: '-30d' },
-    '/etc/shop/secrets.env': { content: 'DB_PASSWORD=pr0d-s3cr3t\nSTRIPE_KEY=sk_live_xxx\n', mode: 0o600, owner: 'root', group: 'root', mtime: '-0.5h' },
+    '/etc/shop/secrets.env': { content: 'DB_PASSWORD=pr0d-s3cr3t\nSTRIPE_KEY=sk_live_xxx\n', mode: 0o600, owner: 'root', group: 'root', mtime: '-12.5h' },
     '/opt/shop/releases/3.1.4/shop.jar': { content: '', size: 51_000_000, mtime: '-12d' },
-    '/opt/shop/releases/3.2.0/shop.jar': { content: '', size: 52_000_000, mtime: '-0.5h' },
-    '/opt/shop/deploy.log': { content: '02:01:10 copy release 3.2.0\n02:01:12 copy config secrets.env (as root)\n02:01:13 systemctl restart shop\n02:01:14 done\n', mtime: '-0.5h' },
+    '/opt/shop/releases/3.2.0/shop.jar': { content: '', size: 52_000_000, mtime: '-12.5h' },
+    '/opt/shop/deploy.log': { content: '02:01:10 copy release 3.2.0\n02:01:12 copy config secrets.env (as root)\n02:01:13 systemctl restart shop\n02:01:14 done\n', mtime: '-12.5h' },
   },
   services: [
     {
@@ -86,7 +86,7 @@ const lesson: LessonDef = {
       id: 'q-root-cause',
       type: 'text',
       prompt: 'Сформулируй первопричину одной фразой (проверяются ключевые слова: про права/доступ и про деплой или секретный файл).',
-      answer: { accept: [], normalize: 'keywords', keywords: [['прав', 'доступ', 'permission', 'access', 'владел', 'owner', '600'], ['деплой', 'deploy', 'скрипт', 'secrets', 'секрет', 'конфиг', 'файл']] },
+      answer: { accept: [], normalize: 'keywords', keywords: [['прав', 'доступ', 'permission', 'access', 'владел', 'owner', '600'], ['депло', 'deploy', 'выкладк', 'релиз', 'release', 'скрипт', 'secrets', 'секрет', 'конфиг', 'файл']] },
       explanation: 'Например: «Деплой-скрипт скопировал secrets.env от root с правами 600, сервис от пользователя shop не смог прочитать файл».',
     },
     {
@@ -101,7 +101,8 @@ const lesson: LessonDef = {
       id: 'q-chain',
       type: 'text',
       prompt: 'Какой командой ты смотришь журнал конкретного systemd-сервиса `shop`? (команда целиком, без -n)',
-      answer: { accept: ['journalctl -u shop', 'journalctl -u shop.service', 'sudo journalctl -u shop', 'journalctl --unit shop', 'journalctl --unit=shop'], normalize: 'exact' },
+      // любые варианты: -u shop, -xeu shop, --unit=shop.service, с sudo, с --no-pager/-f
+      answer: { accept: [], normalize: 'keywords', keywords: [['journalctl'], ['-u', 'u shop', '--unit'], ['shop']] },
       explanation: '`journalctl -u <сервис>`; добавь `-n 50` для последних строк или `-f` для слежения.',
     },
   ],

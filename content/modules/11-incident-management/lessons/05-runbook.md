@@ -17,7 +17,7 @@
 3. Логи payments: service:payments AND level:warn — медленные запросы, фоновые задачи.
 ## Митигация
 - Если соединения держит фоновая задача (reconcile-report): остановить job → kubectl delete job …
-- Если всплеск трафика: kubectl scale deployment/payments --replicas=+2 (пул на под).
+- Если всплеск трафика: kubectl scale deployment/payments --replicas=6 (было 4; у каждого пода свой пул — сверь сумму с max_connections БД).
 ## Проверка
 Пул < 70%, доля 5xx < 1% в течение 10 минут.
 ## Эскалация

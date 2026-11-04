@@ -14,7 +14,8 @@ const lesson: LessonDef = {
     {
       id: 'status-dist',
       prompt: 'Построй **распределение HTTP-статусов** в `/var/log/nginx/access.log`: сколько раз встречается каждый код. Статус — 9-е поле.',
-      check: { type: 'all', checks: [{ type: 'outputMatches', pattern: `^\\s*${stats.s502}\\s+502$` }, { type: 'outputMatches', pattern: '\\s200$' }] },
+      // «21 502» (sort | uniq -c) или «502 21» (awk-массив из теории) — порядок колонок не важен
+      check: { type: 'all', checks: [{ type: 'outputMatches', pattern: `^[ \\t]*(${stats.s502}[ \\t]+502|502[ \\t]+${stats.s502})[ \\t]*$` }, { type: 'outputMatches', pattern: '^[ \\t]*(\\d+[ \\t]+200|200[ \\t]+\\d+)[ \\t]*$' }] },
       hints: ["`awk '{print $9}' файл` выведет все статусы.", 'Дальше рецепт: `| sort | uniq -c | sort -rn`.'],
       solution: "awk '{print $9}' /var/log/nginx/access.log | sort | uniq -c | sort -rn",
       tags: ['awk', 'pipes'],

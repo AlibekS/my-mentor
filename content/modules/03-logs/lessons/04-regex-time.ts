@@ -30,7 +30,7 @@ const lesson: LessonDef = {
       id: 'e-50x',
       prompt: 'Посчитай ответы с кодами **502, 503 или 504** в `/var/log/nginx/access.log` одним `grep -E`. Выведи число.',
       check: { type: 'outputNumber', value: n50x },
-      hints: ['Набор символов: `50[234]`.', "Статус окружён пробелами: `grep -cE '\" 50[234] ' файл`."],
+      hints: ['Набор символов: `50[234]`.', "Статус стоит сразу после кавычки, закрывающей запрос: `grep -cE '\" 50[234] ' файл`. Без кавычки совпадёт и поле размера ответа (строка `200 503` — это 503 байта)."],
       solution: `grep -cE '" 50[234] ' /var/log/nginx/access.log`,
       tags: ['grep'],
     },
@@ -53,7 +53,7 @@ const lesson: LessonDef = {
     {
       id: 'cause',
       prompt: 'По журналу сервиса `payment`: что закончилось у сервиса в 14:05? Введи ответ (2–3 слова, можно по-английски).',
-      answer: { accept: [], normalize: 'keywords', keywords: [['pool', 'пул'], ['db', 'бд', 'баз', 'connection', 'соединен', 'подключ']], label: 'Что закончилось:' },
+      answer: { accept: [], normalize: 'keywords', keywords: [['pool', 'пул', 'connection', 'соединен', 'подключ', 'коннект']], label: 'Что закончилось:' },
       hints: ['Посмотри ошибки сервиса за 14:00–14:10.'],
       solution: 'journalctl -u payment --since "14:00" --until "14:10"',
       explanation: '**DB connection pool exhausted** — закончились соединения в пуле к БД: запросы ждали 30 с и падали, nginx отдавал 502.',

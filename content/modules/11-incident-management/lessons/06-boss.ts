@@ -1,6 +1,6 @@
 import type { LessonDef } from '../../../../src/content/types';
 import type { Scenario } from '../../../../src/shell/types';
-import { scenario as base } from '../data';
+import { IC, NEXT_UPDATE, scenario as base, UTC_TIME } from '../data';
 
 const mails: string[] = [];
 let failed = 0;
@@ -8,7 +8,8 @@ for (let m = 0; m < 100; m++) {
   const h = 9 + Math.floor((m + 5) / 60);
   const mm = (m + 5) % 60;
   const t = `2026-11-07T${String(h).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00Z`;
-  const bad = m >= 10 && m < 73;
+  // ошибки с 09:15 до 10:11 включительно: в 10:12 секрет обновлён и письма снова уходят (как в timeline.md)
+  const bad = m >= 10 && m < 67;
   if (bad) failed++;
   mails.push(`${t} mailer type=${m % 3 === 0 ? 'password_reset' : 'order_confirmation'} to=user${m}@mail.kz status=${bad ? 'failed error="535 5.7.8 Authentication credentials invalid"' : 'sent'}`);
 }
@@ -53,12 +54,12 @@ const lesson: LessonDef = {
         minWords: 25,
         template: 'SEV? declared: \nImpact: \nIC: \nChannel: \nNext update: ',
         rubric: [
-          { label: 'severity', any: ['\\bSEV\\s?[1-4]\\b'] },
+          { label: 'severity', any: ['\\bSEV[\\s-]?[1-4]\\b'] },
           { label: 'impact: письма / email', any: ['impact[ \\t]*:[^\\n]*(email|mail|password|notification)', '(email|mail)s?[^\\n]*(not|fail|undeliver)'] },
-          { label: 'время начала UTC', any: ['\\d{1,2}:\\d{2}\\s?UTC'] },
-          { label: 'IC', any: ['\\bIC[ \\t]*[:\\-]?[ \\t]*@?\\w+'] },
+          { label: 'время начала UTC', any: UTC_TIME },
+          { label: 'IC', any: IC },
           { label: 'канал', any: ['#[\\w-]+'] },
-          { label: 'next update', any: ['next update.{0,30}\\d{1,2}:\\d{2}'] },
+          { label: 'next update', any: NEXT_UPDATE },
         ],
       },
       hints: ['Severity: ключевая функция деградировала у всех, но сайт и оплата работают — обычно SEV2.', 'Начало — первые ошибки в логе (09:15 UTC).', 'Формат как в уроке «Триаж».'],
@@ -67,7 +68,7 @@ const lesson: LessonDef = {
     {
       id: 'cause',
       prompt: 'Найди причину: какая **ошибка SMTP** в логе (код из трёх цифр) и какое **изменение** в `~/inc2/changes.log` случилось прямо перед этим? Введи номер изменения (CHG-…).',
-      answer: { accept: ['CHG-904', 'chg-904', '904'], label: 'Изменение:' },
+      answer: { accept: [], normalize: 'keywords', keywords: [['904']], label: 'Изменение:' },
       hints: ['`grep failed ~/inc2/mailer.log | head -1` — код 535 (неверные учётные данные).', '`cat ~/inc2/changes.log`'],
       solution: 'cat ~/inc2/changes.log',
       explanation: 'Infra в 09:00 ротировала пароль SMTP (CHG-904), а mailer продолжил использовать старый из своего секрета → `535 Authentication credentials invalid`.',
@@ -79,11 +80,11 @@ const lesson: LessonDef = {
         lang: 'en',
         minWords: 25,
         rubric: [
-          { label: 'identified / found the cause', any: ['identified', 'found the cause', 'cause has been'] },
+          { label: 'identified / found the cause', any: ['identified', 'found the (cause|issue|problem|reason)', 'cause has been'] },
           { label: 'email / notifications', any: ['email', 'notification', 'password reset'] },
-          { label: 'повторная отправка', any: ['resen[dt]', 're-sen[dt]', 'will be (delivered|sent)', 'retry'] },
-          { label: 'next update', any: ['next update.{0,30}\\d{1,2}:\\d{2}', 'update.{0,30}(within|in)\\s+\\d+\\s*min'] },
-          { label: 'без внутренних деталей', none: ['smtp', 'chg-', 'credential', '535', 'secret', 'infra'] },
+          { label: 'повторная отправка', any: ['re-?sen[dt]', 're-?deliver', 'will be (\\w+ )?(delivered|sent)', 'send .{0,40}again', 'retry'] },
+          { label: 'next update', any: NEXT_UPDATE },
+          { label: 'без внутренних деталей', none: ['smtp', 'chg-', 'credential', '535', '\\bsecrets?\\b', '\\binfra\\b'] },
         ],
       },
       hints: ['Причина простыми словами: «a configuration issue with our email provider integration».', 'Обещай повторную отправку писем, которые не дошли.'],
@@ -110,7 +111,7 @@ const lesson: LessonDef = {
           { label: 'причина: ротация пароля / учётные данные', any: ['ротац', 'парол', 'учётн', 'учетн', 'credential', 'секрет'] },
           { label: 'восстановление: обновили секрет / переотправили', any: ['обнов', 'перезапуст', 'переотправ', 'повторн'] },
           { label: '2+ action items с owner и due', any: ['^-[^\\n]*owner:[ \\t]*@\\w+[^\\n]*due:[ \\t]*\\d{4}-\\d{2}-\\d{2}'], minMatches: 2 },
-          { label: 'action item про процесс ротации (оповещение/автоматизация/проверка)', any: ['(ротац|rotation)[^\\n]*(автомат|оповещ|уведом|провер|чек-лист|vault|синхрон)', '(автомат|оповещ|уведом|провер|чек-лист|vault|синхрон)[^\\n]*(ротац|rotation|секрет)'] },
+          { label: 'action item про процесс ротации (оповещение/автоматизация/проверка)', any: ['(ротац|rotation|смен\\S* парол|парол|секрет)[^\\n]*(автомат|оповещ|уведом|провер|чек-лист|vault|синхрон)', '(автомат|оповещ|уведом|провер|чек-лист|vault|синхрон)[^\\n]*(ротац|rotation|секрет|парол)'] },
           { label: 'без поиска виноватых', none: ['винова', 'накаж'] },
         ],
       },

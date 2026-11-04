@@ -20,7 +20,7 @@ const lesson: LessonDef = {
     {
       id: 'denied',
       prompt: 'Попробуй прочитать `/etc/shop/db.conf`. Не получится. Посмотри права файла через `ls -l` и введи, **кто его владелец** (пользователь).',
-      answer: { accept: ['root'], label: 'Владелец:' },
+      answer: { accept: ['root', 'root:root', 'root root'], label: 'Владелец:' },
       hints: ['`ls -l /etc/shop/db.conf`', 'Третья колонка — владелец, четвёртая — группа.'],
       solution: 'ls -l /etc/shop/db.conf',
       tags: ['ls'],

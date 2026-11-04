@@ -56,7 +56,7 @@ const lesson: LessonDef = {
     {
       id: 'escalated',
       prompt: 'Какой тикет эскалирован на L3? Найди его командой (не открывая файлы по одному) и введи номер тикета в поле ответа.',
-      answer: { accept: ['TCK-1042', '1042', 'TCK-1042.txt'], label: 'Номер тикета:', placeholder: 'TCK-....' },
+      answer: { accept: ['TCK-1042', '1042', 'TCK-1042.txt', 'TCK 1042', '/home/alibek/tickets/TCK-1042.txt', '~/tickets/TCK-1042.txt'], label: 'Номер тикета:', placeholder: 'TCK-....' },
       hints: ['Ищи строку со словом `L3` во всех файлах сразу.', '`grep L3 ~/tickets/*` — звёздочка подставит все файлы каталога.'],
       solution: 'grep -l "Escalated to L3" ~/tickets/*',
       explanation: '`grep` ищет строки по шаблону; при нескольких файлах он печатает имя файла перед совпадением. Флаг `-l` выводит только имена файлов.',
@@ -83,7 +83,7 @@ const lesson: LessonDef = {
       id: 'q-level',
       type: 'text',
       prompt: 'Клиент спрашивает, где в интерфейсе кнопка экспорта. Ответ есть в базе знаний. Какой уровень поддержки должен закрыть такое обращение? (L1/L2/L3)',
-      answer: { accept: ['L1', 'л1', '1', 'first line'] },
+      answer: { accept: ['L1', 'л1', '1', 'first line', 'first-line', 'service desk', 'L1 (service desk)', 'L1 service desk', 'tier 1', 'первая линия', '1-я линия', '1 линия', 'первый уровень'] },
       explanation: 'Вопрос «как сделать» с ответом в базе знаний — работа **L1 (service desk)**.',
     },
     {

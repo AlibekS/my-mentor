@@ -55,7 +55,7 @@ const lesson: LessonDef = {
     {
       id: 'why',
       prompt: 'Почему nginx не стартует? Найди в журнале ошибку и введи **номер порта**, который не удалось занять.',
-      answer: { accept: ['80'], normalize: 'number', label: 'Порт:' },
+      answer: { accept: ['80', ':80', '0.0.0.0:80', '*:80', 'порт 80', '80 порт', 'port 80', '80/tcp', 'tcp/80', 'tcp 80', 'tcp:80'], label: 'Порт:' },
       hints: ['`journalctl -u nginx -n 10`', 'Ищи `bind() ... failed`.'],
       solution: 'journalctl -u nginx -n 10',
       tags: ['journalctl'],
@@ -87,15 +87,16 @@ const lesson: LessonDef = {
     {
       id: 'verify',
       prompt: 'Проверь, что сайт снова отвечает: запроси **заголовки** `http://localhost`.',
-      check: { type: 'all', checks: [{ type: 'outputContains', value: 'HTTP/1.1 200' }, { type: 'commandUsed', name: 'curl' }] },
+      // заголовки в stdout (-I, -i) или в stderr (-v)
+      check: { type: 'custom', fn: (_sh, last) => !!last && last.commands.includes('curl') && /HTTP\/[\d.]+ 200/.test(last.stdout + last.stderr) },
       hints: ['`curl -I http://localhost`'],
       solution: 'curl -I http://localhost',
       tags: ['curl'],
     },
   ],
   quiz: [
-    { id: 'q-98', type: 'text', prompt: 'Ошибка `bind() ... failed (98: Address already in use)`. Что она значит одной фразой? (ключевые слова: порт занят)', answer: { accept: [], normalize: 'keywords', keywords: [['порт', 'port', 'адрес', 'address'], ['занят', 'используется', 'in use', 'busy']] }, explanation: 'Порт уже слушает другой процесс; найти его — `ss -tulpn` или `lsof -i :80`.' },
-    { id: 'q-rca', type: 'text', prompt: 'RCA: что стало первопричиной недоступности сайта? (ключевые слова: тестовый процесс/http.server и порт 80)', answer: { accept: [], normalize: 'keywords', keywords: [['тест', 'http.server', 'python', 'стажер', 'стажёр', 'ручн'], ['80', 'порт', 'port']] }, explanation: 'Ручной тестовый процесс на проде занял порт 80; при перезапуске nginx не смог его занять.' },
+    { id: 'q-98', type: 'text', prompt: 'Ошибка `bind() ... failed (98: Address already in use)`. Что она значит одной фразой? (ключевые слова: порт занят)', answer: { accept: [], normalize: 'keywords', keywords: [['порт', 'port', 'адрес', 'address', '80'], ['занят', 'используется', 'in use', 'busy', 'слуша', 'другой процесс']] }, explanation: 'Порт уже слушает другой процесс; найти его — `ss -tulpn` или `lsof -i :80`.' },
+    { id: 'q-rca', type: 'text', prompt: 'RCA: что стало первопричиной недоступности сайта? (ключевые слова: тестовый процесс/http.server и порт 80)', answer: { accept: [], normalize: 'keywords', keywords: [['тест', 'http.server', 'python', 'стажер', 'стажёр', 'ручн', 'забыт'], ['80', 'порт', 'port']] }, explanation: 'Ручной тестовый процесс на проде занял порт 80; при перезапуске nginx не смог его занять.' },
     { id: 'q-prevent', type: 'choice', prompt: 'Какой action item лучше всего предотвратит повтор?', options: ['Запретить ночные работы', 'Работы на проде только через change-процесс и с проверкой после; алерт на failed-юниты и недоступность сайта', 'Всегда делать kill -9 всему подозрительному'], correct: 1, explanation: 'Процесс изменений + мониторинг закрывают и причину, и время обнаружения (инцидент заметили только утром).' },
   ],
   glossary: [

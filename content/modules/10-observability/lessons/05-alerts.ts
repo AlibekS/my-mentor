@@ -21,7 +21,7 @@ const lesson: LessonDef = {
     {
       id: 'when-fires',
       prompt: 'Во сколько впервые сработало бы это условие (без учёта `for`)? Введи `ЧЧ:ММ` первой точки на графике.',
-      answer: { accept: ['14:07', '14:06', '14:08'], label: 'Время:' },
+      answer: { accept: [], normalize: 'keywords', keywords: [['14:06', '14:07', '14:08']], label: 'Время:', placeholder: 'ЧЧ:ММ' },
       hints: ['Наведи курсор на начало ряда.', 'Обрати внимание: из‑за окна [5m] условие срабатывает на пару минут позже реального начала (14:04).'],
       solution: 'sum(rate(http_requests_total{service="checkout",code=~"5.."}[5m])) / sum(rate(http_requests_total{service="checkout"}[5m])) > 0.05',
       obs: 'promql',
@@ -46,8 +46,8 @@ const lesson: LessonDef = {
   quiz: [
     { id: 'q-symptom', type: 'choice', prompt: 'Какой алерт лучше будить дежурного ночью?', options: ['CPU > 80% на любой ноде', 'Доля 5xx на оформлении заказа > 5% в течение 5 минут', 'Число логов выросло'], correct: 1, explanation: 'Алерт на симптом, который чувствует клиент, + длительность.' },
     { id: 'q-for', type: 'text', prompt: 'Какое поле правила Prometheus задаёт, сколько условие должно держаться перед срабатыванием? (одно слово)', answer: { accept: ['for', 'for:'] }, explanation: '`for: 5m` — защита от флаппинга.' },
-    { id: 'q-fatigue', type: 'text', prompt: 'Как называется «усталость от алертов», когда их слишком много и их начинают игнорировать? (англ., два слова)', answer: { accept: ['alert fatigue'] }, explanation: 'Alert fatigue — лечится удалением бесполезных алертов и группировкой.' },
-    { id: 'q-slo', type: 'promql', prompt: 'Напиши выражение: доля 5xx **payments** больше 1% (`> 0.01`).', solution: 'sum(rate(http_requests_total{service="payments",code=~"5.."}[5m])) / sum(rate(http_requests_total{service="payments"}[5m])) > 0.01', explanation: 'Тот же шаблон для payments.' },
+    { id: 'q-fatigue', type: 'text', prompt: 'Как называется «усталость от алертов», когда их слишком много и их начинают игнорировать? (англ., два слова)', answer: { accept: [], normalize: 'keywords', keywords: [['fatigue']] }, explanation: 'Alert fatigue — лечится удалением бесполезных алертов и группировкой.' },
+    { id: 'q-slo', type: 'promql', prompt: 'Напиши выражение: доля 5xx **payments** больше 1% (`> 0.01`), окно `[5m]`.', solution: 'sum(rate(http_requests_total{service="payments",code=~"5.."}[5m])) / sum(rate(http_requests_total{service="payments"}[5m])) > 0.01', explanation: 'Тот же шаблон для payments.' },
   ],
   glossary: [
     { ru: 'Усталость от алертов', en: 'alert fatigue', def: 'Привыкание к частым ложным алертам и их игнорирование.' },

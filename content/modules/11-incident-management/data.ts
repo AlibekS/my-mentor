@@ -66,3 +66,16 @@ SEV4 — косметика, вопрос, нет влияния на клиен
     },
   },
 };
+
+/** Общие шаблоны чек-листов для письменных заданий модуля (сообщения об инциденте на английском) */
+export const UTC_TIME = ['\\d{1,2}:\\d{2}\\s?\\(?UTC', 'UTC\\s?\\d{1,2}:\\d{2}', '\\d{1,2}:\\d{2}\\s?(Z|GMT)\\b'];
+export const IC = ['\\bIC\\b[ \\t:*\\-–—]{0,6}@?\\w+', 'incident commander[ \\t:*\\-–—]{0,6}@?\\w+'];
+export const NEXT_UPDATE = [
+  'next (status )?update.{0,40}\\d{1,2}:\\d{2}',
+  'update.{0,30}\\d{1,2}:\\d{2}',
+  'next (status )?update.{0,20}\\d+\\s*(min|minutes|mins|h|hours?)\\b',
+  'update.{0,30}(within|in)\\s+(\\d+\\s*(min|minutes|mins|hours?)\\b|half an hour|an hour)',
+  'next (status )?update by',
+];
+export const NO_CHARGE = ["(not|n't|never)\\s+(been\\s+)?(charged|billed|debited)", 'no (customers were )?charge', 'no (money|funds|payment) (was|were|has been) (taken|charged|debited)', 'refund'];
+export const APOLOGY = ['apolog', 'sorry'];

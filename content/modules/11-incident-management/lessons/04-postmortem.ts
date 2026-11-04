@@ -39,10 +39,10 @@ const lesson: LessonDef = {
         minWords: 25,
         template: '- [P1]  — owner: @ — due: 2026-11-\n- [P2]  — owner: @ — due: 2026-11-\n- [P2]  — owner: @ — due: 2026-11-',
         rubric: [
-          { label: '3+ строк с owner и due', any: ['^-[^\\n]*owner:[ \\t]*@\\w+[^\\n]*due:[ \\t]*\\d{4}-\\d{2}-\\d{2}'], minMatches: 3 },
+          { label: '3+ строк с owner и due', any: ['^[ \\t]*[-*•][^\\n]*owner:[ \\t]*@\\w+[^\\n]*due:[ \\t]*\\d{4}-\\d{2}-\\d{2}'], minMatches: 3 },
           { label: 'приоритеты [P1]/[P2]', any: ['\\[P[0-3]\\]'] },
           { label: 'индекс', any: ['индекс', 'index'] },
-          { label: 'изоляция отчётов: реплика / отдельный пул', any: ['реплик', 'replica', 'отдельн\\S* пул', 'separate pool', 'изолир'] },
+          { label: 'изоляция отчётов: реплика / отдельный пул', any: ['реплик', 'replica', '(отдельн|выделенн)\\S* (пул|бд|баз|инстанс|сервер)', 'separate pool', 'dedicated pool', 'изолир'] },
           { label: 'алерт на пул', any: ['алерт', 'alert'] },
         ],
       },
@@ -54,7 +54,7 @@ const lesson: LessonDef = {
     { id: 'q-mttd', type: 'text', prompt: 'Что такое MTTD? Расшифруй (англ.).', answer: { accept: [], normalize: 'keywords', keywords: [['time'], ['detect']] }, explanation: 'Mean Time To Detect — от начала проблемы до обнаружения (алерта).' },
     { id: 'q-mtta', type: 'text', prompt: 'Алерт в 03:10, дежурный подтвердил в 03:24. Чему равен MTTA (минут)?', answer: { accept: ['14'], normalize: 'number' }, explanation: 'Time to acknowledge = 03:24 − 03:10 = 14 мин.' },
     { id: 'q-ai', type: 'choice', prompt: 'Какой action item сформулирован правильно?', options: ['Улучшить мониторинг', 'Добавить алерт «db pool > 90% 2m» (page) — owner: @alibek — due: 2026-11-10', 'Быть внимательнее при релизах'], correct: 1, explanation: 'Конкретное действие + владелец + срок.' },
-    { id: 'q-rfo', type: 'text', prompt: 'Как называется упрощённая версия постмортема для клиента? (аббревиатура из 3 букв, англ.)', answer: { accept: ['RFO'] }, explanation: 'RFO — reason for outage.' },
+    { id: 'q-rfo', type: 'text', prompt: 'Как называется упрощённая версия постмортема для клиента? (аббревиатура из 3 букв, англ.)', answer: { accept: [], normalize: 'keywords', keywords: [['rfo', 'reason for outage']] }, explanation: 'RFO — reason for outage.' },
   ],
   glossary: [
     { ru: 'Постмортем', en: 'postmortem / post-incident review', def: 'Документ-разбор инцидента с выводами и задачами.' },

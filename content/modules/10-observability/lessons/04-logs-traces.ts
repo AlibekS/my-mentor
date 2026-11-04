@@ -20,7 +20,7 @@ const lesson: LessonDef = {
     {
       id: 'msg',
       prompt: 'Что говорят эти ошибки? Введи, **чего не хватает** сервису (ключевые слова из сообщения: что недоступно).',
-      answer: { accept: [], normalize: 'keywords', keywords: [['connection', 'соединен', 'pool', 'пул']], label: 'Чего не хватает:' },
+      answer: { accept: [], normalize: 'keywords', keywords: [['connection', 'соединен', 'pool', 'пул', 'подключен', 'коннект']], label: 'Чего не хватает:' },
       hints: ['Прочитай поле msg — `Connection is not available…`.'],
       solution: 'service:payments AND level:error',
       obs: 'logs',
@@ -28,7 +28,7 @@ const lesson: LessonDef = {
     {
       id: 'trace',
       prompt: `Возьми trace_id первой ошибки (\`${firstErr.trace_id}\`), найди трейс во вкладке «Трейсы» и открой его. Какая **операция** заняла почти всё время? Введи её название (как в спане, после имени сервиса).`,
-      answer: { accept: [], normalize: 'keywords', keywords: [['acquire', 'pool', 'пул', 'соединен']], label: 'Операция:' },
+      answer: { accept: [], normalize: 'keywords', keywords: [['acquire', 'pool', 'пул', 'соединен', 'подключен', 'connection']], label: 'Операция:' },
       hints: ['Вставь trace_id в поиск трейсов и кликни по нему.', 'Ищи самый длинный спан без дочерних.'],
       solution: `Трейсы → ${firstErr.trace_id} → payments «db: acquire connection (pool)» 30000 ms`,
       explanation: '30 с — это ожидание соединения из пула, а не выполнение запроса. Значит, пул кто-то занял — нужно найти, кто.',
@@ -36,7 +36,7 @@ const lesson: LessonDef = {
     {
       id: 'culprit',
       prompt: 'Кто занял пул? Найди в логах payments **предупреждения** (`level:warn`) и задачу, стартовавшую около 14:02. Введи имя задачи (job).',
-      answer: { accept: ['reconcile-report', 'reconcile report', 'reconcile'], label: 'Задача:' },
+      answer: { accept: [], normalize: 'keywords', keywords: [['reconcile']], label: 'Задача:' },
       hints: ['`service:payments AND (level:warn OR level:info) AND NOT "order placed"`', 'Или просто поиск по слову `job`.'],
       solution: 'service:payments AND job',
       obs: 'logs',
@@ -44,9 +44,9 @@ const lesson: LessonDef = {
     },
   ],
   quiz: [
-    { id: 'q-kql', type: 'text', prompt: 'Напиши KQL-запрос: ошибки (`level:error`) сервиса `checkout`.', answer: { accept: ['service:checkout AND level:error', 'level:error AND service:checkout', 'service:checkout and level:error', 'service:checkout level:error'], normalize: 'exact' }, explanation: '`service:checkout AND level:error`.' },
+    { id: 'q-kql', type: 'text', prompt: 'Напиши KQL-запрос: ошибки (`level:error`) сервиса `checkout`.', answer: { accept: [], normalize: 'keywords', keywords: [['service:checkout', 'service: checkout', 'service : checkout'], ['level:error', 'level: error', 'level : error']] }, explanation: '`service:checkout AND level:error`.' },
     { id: 'q-span', type: 'choice', prompt: 'Как найти «виновника» в трейсе?', options: ['Самый первый спан', 'Самый длинный спан без дочерних спанов (там реально тратится время)', 'Спан с самым коротким именем'], correct: 1, explanation: 'Родитель длинный, потому что ждёт детей; смотри листья.' },
-    { id: 'q-struct', type: 'text', prompt: 'Как называются логи в формате JSON с полями (service, level, trace_id), по которым удобно фильтровать? (англ., одно слово)', answer: { accept: ['structured', 'структурированные'] }, explanation: 'Structured logging.' },
+    { id: 'q-struct', type: 'text', prompt: 'Как называются логи в формате JSON с полями (service, level, trace_id), по которым удобно фильтровать? (англ., одно слово)', answer: { accept: [], normalize: 'keywords', keywords: [['structured', 'структурирован']] }, explanation: 'Structured logging.' },
     { id: 'q-order', type: 'text', prompt: 'Перечисли правильный порядок расследования через стрелки: метрики, логи, трейсы (ключевые слова в нужном порядке).', answer: { accept: [], normalize: 'keywords', keywords: [['метрик', 'metric'], ['лог', 'log'], ['трейс', 'trace']] }, explanation: 'Метрики → логи → трейсы → обратно к метрикам ресурса для подтверждения.' },
   ],
   glossary: [

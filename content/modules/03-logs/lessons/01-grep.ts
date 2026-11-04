@@ -12,7 +12,8 @@ for (let i = 0; i < 180; i++) {
     i % 10 === 0 ? 'GET /health 200' : `request ok path=/api/products/${i} user_id=${8800 + (i % 7)}`;
   app.push(`${t} ${lvl.padEnd(5)} ${msg}`);
 }
-app.splice(150, 0, '2026-11-04 13:50:05 FATAL OutOfMemoryError: Java heap space');
+// после строки 13:50:00 и до 13:50:20 — чтобы время в логе шло по порядку
+app.splice(151, 0, '2026-11-04 13:50:05 FATAL OutOfMemoryError: Java heap space');
 const log = app.join('\n') + '\n';
 const lines = log.trim().split('\n');
 const errCi = lines.filter((l) => /error/i.test(l.split(' ')[2] ?? '')).length;
@@ -30,7 +31,7 @@ const lesson: LessonDef = {
   tasks: [
     {
       id: 'ci',
-      prompt: 'В логе `/var/log/app/app.log` ошибки пишутся то как `ERROR`, то как `error`. Посчитай **все строки**, где встречается слово error в любом регистре. Выведи число.',
+      prompt: 'В логе `/var/log/app/app.log` ошибки пишутся то как `ERROR`, то как `error`, а иногда это слово — часть другого (`OutOfMemoryError`). Посчитай **все строки**, где встречается `error` в любом регистре, в том числе внутри других слов. Выведи число.',
       check: { type: 'outputNumber', value: errAny },
       hints: ['Нужны два флага: без учёта регистра и подсчёт.', '`grep -ic error /var/log/app/app.log`'],
       solution: 'grep -ic error /var/log/app/app.log',
@@ -40,7 +41,8 @@ const lesson: LessonDef = {
     {
       id: 'fatal',
       prompt: 'Найди строку с уровнем **FATAL** и выведи её **с номером строки**.',
-      check: { type: 'all', checks: [{ type: 'outputContains', value: `${fatalLine}:` }, { type: 'outputContains', value: 'OutOfMemoryError' }] },
+      // номер строки в любом виде: «151:…» (grep -n), «   151\t…» (cat -n | grep), «151 …» (awk NR)
+      check: { type: 'all', checks: [{ type: 'outputMatches', pattern: `(^|\\s)${fatalLine}(:|\\s)` }, { type: 'outputContains', value: 'OutOfMemoryError' }, { type: 'outputLines', value: 1 }] },
       hints: ['Номера строк — флаг `-n`.'],
       solution: 'grep -n FATAL /var/log/app/app.log',
       tags: ['grep'],
@@ -98,7 +100,7 @@ const lesson: LessonDef = {
       prompt: 'Ты ищешь HTTP-статус 500 командой `grep 500 access.log`, но получаешь лишние строки с «15003 bytes». Как точнее?',
       options: ['grep -i 500', 'grep -w 500 или grep " 500 "', 'grep -c 500'],
       correct: 1,
-      explanation: '`-w` — только целое слово; или добавь пробелы вокруг в кавычках.',
+      explanation: '`-w` — только целое слово; или добавь пробелы вокруг в кавычках. Но в access.log и это может поймать поле размера ответа (`… 200 500 …` — 500 байт), поэтому статус надёжнее искать сразу после кавычки: `grep \'" 500 \'` или `awk \'$9 == 500\'`.',
     },
   ],
   glossary: [

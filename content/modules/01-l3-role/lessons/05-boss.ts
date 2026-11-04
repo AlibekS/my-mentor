@@ -54,7 +54,7 @@ Checked by L2: not related to customer config; reproduced on test order at 12:38
     {
       id: 'priority',
       prompt: 'Функция оплаты работает частично (≈30% отказов), есть обход — повторить попытку. Какой приоритет по матрице? Введи P1–P4.',
-      answer: { accept: ['P2', 'p2', 'high'], label: 'Приоритет:' },
+      answer: { accept: ['P2', 'p2', 'high', 'P2 high', 'P2 / high', 'P2/high', 'P2 (high)', 'P2 - high', 'P2 — high'], label: 'Приоритет:' },
       hints: ['Посмотри `~/sla/policy.txt` и описание приоритетов в теории босса.', 'Не полная недоступность, но важная функция и деньги — High.'],
       solution: 'cat ~/sla/policy.txt',
       explanation: 'Частичная деградация с обходом — **P2**. Если бы падали 100% оплат — P1. Многие компании поднимают приоритет для Enterprise-клиента во время пикового события — это нормально обсудить с дежурным менеджером.',
@@ -62,7 +62,7 @@ Checked by L2: not related to customer config; reproduced on test order at 12:38
     {
       id: 'deadline',
       prompt: 'Тикет создан в 12:40 UTC, приоритет P2. До какого времени (UTC) нужно дать **первый ответ** клиенту по SLA? Формат `ЧЧ:ММ`.',
-      answer: { accept: ['13:40', '13.40', '1340'], label: 'Время UTC:' },
+      answer: { accept: [], normalize: 'keywords', keywords: [['13:40', '13.40', '1340']], label: 'Время UTC:' },
       hints: ['Найди в политике SLA время ответа (response) для P2.', '12:40 + 1 час.'],
       solution: 'grep P2 ~/sla/policy.txt\n# response 1h: 12:40 + 1:00 = 13:40 UTC',
     },
@@ -91,7 +91,8 @@ Checked by L2: not related to customer config; reproduced on test order at 12:38
           const n = sh.fs.lookup('/home/alibek/escalation-TCK-1077.md');
           if (!n) return false;
           const c = n.content;
-          return c.startsWith('# Escalation TCK-1077') && /^Impact:.+/m.test(c) && /^Since:.*12:20/m.test(c) && /^Evidence:.+/m.test(c);
+          // регистр и маркер списка («- Impact:») не важны; время — 12:20 или 12.20
+          return c.startsWith('# Escalation TCK-1077') && /^[-*\s]*Impact:.+/im.test(c) && /^[-*\s]*Since:.*12[:.]20/im.test(c) && /^[-*\s]*Evidence:.+/im.test(c);
         },
       },
       hints: [
@@ -118,7 +119,7 @@ echo "Evidence: gateway.log — status=503 msg=\\"upstream bank API unavailable\
       id: 'q-upstream',
       type: 'text',
       prompt: 'По логу, какая внешняя зависимость недоступна? (как в сообщении об ошибке, два-три слова)',
-      answer: { accept: [], normalize: 'keywords', keywords: [['bank'], ['api', 'апи']] },
+      answer: { accept: [], normalize: 'keywords', keywords: [['bank', 'банк'], ['api', 'апи']] },
       explanation: 'В логе: `upstream bank API unavailable` — проблема на стороне **банковского API** (upstream). Значит, параллельно нужно связаться с провайдером.',
     },
     {
