@@ -1,0 +1,32 @@
+{
+  "id": "11-incident-management",
+  "order": 11,
+  "title": "Управление инцидентами",
+  "titleEn": "Incident Management",
+  "short": "триаж, коммуникация во время инцидента, RCA (5 почему), постмортем, runbook, база знаний.",
+  "description": "Как вести инцидент: роли (incident commander), статусы для клиента, обновления по таймеру, blameless-постмортем, 5 почему, action items, runbook и статья в базу знаний. С примерами на английском.",
+  "icon": "🚨",
+  "importance": 5,
+  "requires": [
+    "01-l3-role"
+  ],
+  "skills": [
+    "провожу триаж и выставляю severity",
+    "пишу статус-апдейт клиенту на английском",
+    "делаю RCA методом 5 почему",
+    "пишу blameless-постмортем с action items"
+  ],
+  "topics": [
+    "Триаж и severity",
+    "Роли и коммуникация",
+    "Статус-апдейты клиенту (EN)",
+    "RCA: 5 почему, fishbone",
+    "Постмортем",
+    "Runbook и knowledge base"
+  ],
+  "reviewedAt": "2026-11-04",
+  "demand": "rising",
+  "marketNote": "Координация инцидентов, RCA и постмортемы — центральная часть L3; инструменты PagerDuty/Opsgenie/incident.io, а также AI-помощники для триажа.",
+  "status": "planned",
+  "estimatedMinutes": 150
+}

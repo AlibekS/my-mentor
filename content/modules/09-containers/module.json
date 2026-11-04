@@ -1,0 +1,32 @@
+{
+  "id": "09-containers",
+  "order": 9,
+  "title": "Контейнеры и Kubernetes",
+  "titleEn": "Containers & Kubernetes",
+  "short": "docker ps/logs/exec, kubectl get/describe/logs, CrashLoopBackOff, события.",
+  "description": "Поддержка приложений в контейнерах: где смотреть логи, почему под в CrashLoopBackOff или ImagePullBackOff, что говорят events, как безопасно перезапустить деплоймент.",
+  "icon": "🐳",
+  "importance": 5,
+  "requires": [
+    "04-processes",
+    "06-network"
+  ],
+  "skills": [
+    "смотрю логи контейнера `docker logs`",
+    "нахожу причину CrashLoopBackOff через `kubectl describe`",
+    "читаю `kubectl get events`",
+    "знаю, что делает `kubectl rollout restart`"
+  ],
+  "topics": [
+    "docker: ps, logs, exec, restart",
+    "Kubernetes: pods, deployments, services",
+    "CrashLoopBackOff, OOMKilled, ImagePullBackOff",
+    "events и describe",
+    "rollout restart и откат"
+  ],
+  "reviewedAt": "2026-11-04",
+  "demand": "rising",
+  "marketNote": "Kubernetes перешёл из «nice to have» в ожидаемый навык; в L3-вакансиях встречаются AKS/EKS/OpenShift и сертификаты CKA/CKAD как плюс.",
+  "status": "planned",
+  "estimatedMinutes": 180
+}

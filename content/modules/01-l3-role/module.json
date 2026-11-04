@@ -1,0 +1,28 @@
+{
+  "id": "01-l3-role",
+  "order": 1,
+  "title": "Роль L3 и процессы поддержки",
+  "titleEn": "The L3 Support Role",
+  "short": "Уровни L1/L2/L3, эскалации, SLA/SLO, ITIL: инцидент, проблема, изменение, тикет-культура.",
+  "description": "Как устроена поддержка в продуктовой/SaaS-компании, где граница ответственности L3, как работают приоритеты и SLA, чем инцидент отличается от проблемы и изменения, как писать тикеты и эскалации, которые не возвращают обратно.",
+  "icon": "🎧",
+  "importance": 4,
+  "requires": [],
+  "skills": [
+    "объясняю разницу между L2 и L3",
+    "знаю, чем SLA отличается от SLO и SLI",
+    "отличаю инцидент от проблемы (ITIL)",
+    "пишу эскалацию в engineering с шагами воспроизведения"
+  ],
+  "topics": [
+    "Уровни поддержки и эскалации",
+    "SLA / SLO / SLI, приоритеты P1–P4, error budget",
+    "ITIL 4: incident, problem, change",
+    "Тикет-культура и коммуникация на английском"
+  ],
+  "reviewedAt": "2026-11-04",
+  "demand": "stable",
+  "marketNote": "Процессы ITIL/ITSM, SLA и on-call упоминаются почти во всех вакансиях L3/Production Support (ServiceNow, Jira Service Management).",
+  "status": "ready",
+  "estimatedMinutes": 110
+}

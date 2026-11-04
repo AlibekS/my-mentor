@@ -1,0 +1,31 @@
+{
+  "id": "08-scripting",
+  "order": 8,
+  "title": "Скрипты и автоматизация",
+  "titleEn": "Scripting & Automation",
+  "short": "bash-однострочники и простые скрипты для автоматизации проверок (+ основы Python).",
+  "description": "Превращаем ручные проверки в скрипты: переменные, условия, циклы, коды выхода, простые health-check скрипты, cron. Плюс где уместен Python.",
+  "icon": "📝",
+  "importance": 3,
+  "requires": [
+    "03-logs"
+  ],
+  "skills": [
+    "пишу цикл for по списку серверов",
+    "проверяю код выхода через `$?` и `&&`",
+    "делаю скрипт с аргументами",
+    "знаю, когда лучше взять Python"
+  ],
+  "topics": [
+    "Переменные, кавычки, подстановка",
+    "Условия и циклы",
+    "Коды выхода, set -euo pipefail",
+    "Health-check скрипты",
+    "cron и systemd timers"
+  ],
+  "reviewedAt": "2026-11-04",
+  "demand": "stable",
+  "marketNote": "Bash/Python-скриптинг указан в большинстве вакансий как «must have» для автоматизации рутинных проверок.",
+  "status": "planned",
+  "estimatedMinutes": 150
+}

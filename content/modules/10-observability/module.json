@@ -1,0 +1,32 @@
+{
+  "id": "10-observability",
+  "order": 10,
+  "title": "Наблюдаемость",
+  "titleEn": "Observability",
+  "short": "метрики, логи, трейсы, алерты, дашборды (Prometheus/Grafana/ELK, OpenTelemetry).",
+  "description": "Читать дашборды и алерты, понимать RED/USE, коррелировать метрики, логи и трейсы, писать простые запросы PromQL/Kibana, понимать, что такое OpenTelemetry и зачем он нужен.",
+  "icon": "🔭",
+  "importance": 4,
+  "requires": [
+    "03-logs"
+  ],
+  "skills": [
+    "понимаю разницу метрик, логов и трейсов",
+    "читаю график latency p95/p99",
+    "знаю методики RED и USE",
+    "по trace id нахожу медленный сервис"
+  ],
+  "topics": [
+    "Метрики, логи, трейсы",
+    "RED и USE",
+    "Prometheus и PromQL на уровне чтения",
+    "Grafana-дашборды",
+    "Алерты и шум",
+    "OpenTelemetry, Datadog, ELK"
+  ],
+  "reviewedAt": "2026-11-04",
+  "demand": "rising",
+  "marketNote": "Datadog, Grafana/Prometheus и OpenTelemetry часто упоминаются в вакансиях; метрико-ориентированные расследования становятся нормой.",
+  "status": "planned",
+  "estimatedMinutes": 150
+}

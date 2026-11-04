@@ -1,0 +1,28 @@
+{
+  "id": "02-linux-files",
+  "order": 2,
+  "title": "Linux: навигация и файлы",
+  "titleEn": "Linux Navigation & Files",
+  "short": "pwd, ls, cd, cat, less, head, tail, find, права и владельцы — уверенно на любом сервере.",
+  "description": "Быстро ориентироваться на незнакомом сервере: где конфиги, где логи, как найти файл по имени/размеру/времени, как читать права и чинить «Permission denied» без chmod 777.",
+  "icon": "🐧",
+  "importance": 4,
+  "requires": [],
+  "skills": [
+    "понимаю вывод `ls -la` (права, владелец, размер)",
+    "нахожу файл командой `find` по имени и размеру",
+    "знаю, что лежит в /etc, /var/log, /opt",
+    "чиню Permission denied через chown/chmod"
+  ],
+  "topics": [
+    "Структура ФС и навигация",
+    "Просмотр файлов: cat, less, head, tail, wc",
+    "Поиск: find",
+    "Права, владельцы, sudo"
+  ],
+  "reviewedAt": "2026-11-04",
+  "demand": "stable",
+  "marketNote": "Linux остаётся базовым требованием для L3/Production Support даже в облачных и SaaS-компаниях.",
+  "status": "ready",
+  "estimatedMinutes": 100
+}
