@@ -70,7 +70,17 @@ const rm: CommandDef = {
         continue;
       }
       try {
+        // открытые процессами файлы исчезают из каталога, но место остаётся занятым
+        const held = ctx.state.openFiles.filter((o) => o.path === p || o.path.startsWith(p + '/'));
+        const sizes = held.map((o) => {
+          const node = ctx.fs.lookup(o.path);
+          return node ? ctx.fs.size(node) : 0;
+        });
         ctx.fs.remove(p, ctx.user, rec);
+        held.forEach((o, i) => {
+          ctx.state.deletedOpen.push({ ...o, size: sizes[i] });
+        });
+        ctx.state.openFiles = ctx.state.openFiles.filter((o) => !held.includes(o));
       } catch (e) {
         if (e instanceof FsErr) err += `rm: cannot remove '${f}': ${errText[e.code]}\n`;
         else throw e;
@@ -245,4 +255,27 @@ const tee: CommandDef = {
   },
 };
 
-export default [touch, mkdir, rm, rmdir, cp, mv, chmod, chown, tee];
+const truncate: CommandDef = {
+  name: 'truncate',
+  summary: 'изменить размер файла: truncate -s 0 app.log — обнулить лог, не удаляя файл (процесс продолжит писать в него)',
+  usage: 'truncate -s РАЗМЕР файл',
+  run(args, _s, ctx) {
+    const a = parseArgs(args, ['s'], ['s']);
+    if (a.values.s === undefined) return fail("truncate: you must specify either '--size' or '--reference'");
+    if (a.values.s !== '0') return fail('truncate: в тренажёре поддерживается только -s 0');
+    let err = '';
+    for (const f of a.positional) {
+      try {
+        const p = abs(ctx, f);
+        if (!ctx.fs.exists(p)) ctx.fs.touch(p, ctx.user);
+        else ctx.fs.write(p, '', ctx.user);
+      } catch (e) {
+        if (e instanceof FsErr) err += `truncate: cannot open '${f}' for writing: ${errText[e.code]}\n`;
+        else throw e;
+      }
+    }
+    return err ? fail(err) : ok();
+  },
+};
+
+export default [touch, mkdir, rm, rmdir, cp, mv, chmod, chown, tee, truncate];

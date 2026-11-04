@@ -42,6 +42,8 @@ export const DEFAULT_RESOURCES: Resources = {
   swapUsedMb: 0,
   load: [0.42, 0.37, 0.31],
   uptime: '23 days,  4:11',
+  cpus: 2,
+  iowait: 0.3,
   disks: [
     { fs: '/dev/sda1', sizeGb: 50, usedGb: 21, mount: '/' },
     { fs: 'tmpfs', sizeGb: 3.9, usedGb: 0, mount: '/dev/shm' },

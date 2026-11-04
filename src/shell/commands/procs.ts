@@ -1,5 +1,6 @@
 import { fail, ok, type CommandDef, type Proc } from '../types';
 import { joinLines } from '../args';
+import { releaseProcess } from '../procstate';
 
 function psLine(p: Proc) {
   return `${p.user.padEnd(10)} ${String(p.pid).padStart(6)} ${p.cpu.toFixed(1).padStart(4)} ${p.mem.toFixed(1).padStart(4)} ${String(p.vsz).padStart(7)} ${String(p.rss).padStart(6)} ?        ${p.stat.padEnd(4)} ${p.start.padEnd(5)} ${p.time.padStart(6)} ${p.command}`;
@@ -40,10 +41,12 @@ const top: CommandDef = {
     const r = ctx.state.resources;
     const procs = [...ctx.state.processes].sort((a, b) => b.cpu - a.cpu);
     const free = r.memTotalMb - r.memUsedMb;
-    const cpuUser = Math.min(99, procs.reduce((s, p) => s + p.cpu, 0) / 4);
     let out = `top - ${ctx.state.now.toTimeString().slice(0, 8)} up ${r.uptime},  2 users,  load average: ${r.load.map((x) => x.toFixed(2)).join(', ')}\n`;
     out += `Tasks: ${procs.length} total,   1 running, ${procs.length - 1} sleeping,   0 stopped,   ${procs.filter((p) => p.stat.includes('Z')).length} zombie\n`;
-    out += `%Cpu(s): ${cpuUser.toFixed(1)} us,  1.2 sy,  0.0 ni, ${(98 - cpuUser).toFixed(1)} id,  0.3 wa,  0.0 hi,  0.1 si,  0.0 st\n`;
+    const cpus = r.cpus ?? 2;
+    const us = Math.min(99, procs.reduce((s, p) => s + p.cpu, 0) / cpus);
+    const wa = r.iowait ?? 0.3;
+    out += `%Cpu(s): ${us.toFixed(1)} us,  1.2 sy,  0.0 ni, ${Math.max(0, 98.5 - us - wa).toFixed(1)} id, ${wa.toFixed(1)} wa,  0.0 hi,  0.1 si,  0.0 st\n`;
     out += `MiB Mem :  ${r.memTotalMb.toFixed(1)} total,  ${free.toFixed(1)} free,  ${r.memUsedMb.toFixed(1)} used,   512.0 buff/cache\n`;
     out += `MiB Swap:  ${r.swapTotalMb.toFixed(1)} total,  ${(r.swapTotalMb - r.swapUsedMb).toFixed(1)} free,  ${r.swapUsedMb.toFixed(1)} used.  ${(free + 400).toFixed(1)} avail Mem\n\n`;
     out += '    PID USER      PR  NI    VIRT    RES  S  %CPU  %MEM     TIME+ COMMAND\n';
@@ -86,7 +89,7 @@ const kill: CommandDef = {
       if (sig === '-HUP' || sig === '-1') continue; // перечитать конфиг
       if (p.stat.includes('D') && sig !== '-9') continue; // не реагирует
       ctx.state.processes.splice(idx, 1);
-      ctx.state.listeners = ctx.state.listeners.filter((l) => l.pid !== pid);
+      releaseProcess(ctx.state, pid);
       if (p.service) {
         const s = ctx.state.services.find((x) => x.name === p.service);
         if (s) {

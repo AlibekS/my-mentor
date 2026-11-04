@@ -1,5 +1,6 @@
 import { fail, ok, type CommandDef, type Service } from '../types';
 import { joinLines } from '../args';
+import { releaseProcess } from '../procstate';
 
 function findSvc(ctx: Parameters<CommandDef['run']>[2], name: string): Service | undefined {
   const n = name.replace(/\.service$/, '');
@@ -52,10 +53,9 @@ export function startService(ctx: Parameters<CommandDef['run']>[2], s: Service):
 }
 
 function stopService(ctx: Parameters<CommandDef['run']>[2], s: Service) {
-  if (s.mainPid) {
-    ctx.state.processes = ctx.state.processes.filter((p) => p.service !== s.name);
-    ctx.state.listeners = ctx.state.listeners.filter((l) => l.process !== s.name);
-  }
+  for (const p of ctx.state.processes.filter((x) => x.service === s.name || x.pid === s.mainPid)) releaseProcess(ctx.state, p.pid);
+  ctx.state.processes = ctx.state.processes.filter((p) => p.service !== s.name && p.pid !== s.mainPid);
+  ctx.state.listeners = ctx.state.listeners.filter((l) => l.process !== s.name);
   s.mainPid = undefined;
   s.active = 'inactive';
   s.logs.push({ time: '2026-11-04 14:30:00', priority: 'info', message: `Stopped ${s.description}.` });
@@ -144,6 +144,7 @@ const journalctl: CommandDef = {
     let since: string | undefined;
     let until: string | undefined;
     let prio: string | undefined;
+    let kernel = false;
     for (let i = 0; i < args.length; i++) {
       const a = args[i];
       if (a === '-u' || a === '--unit') unit = args[++i];
@@ -155,13 +156,16 @@ const journalctl: CommandDef = {
       else if (a === '--until' || a === '-U') until = args[++i];
       else if (a === '-p' || a === '--priority') prio = args[++i];
       else if (a.startsWith('-p') && a.length > 2) prio = a.slice(2);
+      else if (a === '-k' || a === '--dmesg') kernel = true;
       else if (/^-[xefrb]+$/.test(a) || a === '--no-pager') continue;
       else if (/^-[a-z]*u$/.test(a)) unit = args[++i]; // -xeu nginx
       else return fail(`journalctl: unrecognized option '${a}'`);
     }
     const svcs = unit ? ctx.state.services.filter((s) => s.name === unit!.replace(/\.service$/, '')) : ctx.state.services;
-    if (unit && !svcs.length) return ok('-- No entries --\n');
-    let entries = svcs.flatMap((s) => s.logs.map((l) => ({ ...l, svc: s.name, pid: s.mainPid ?? 1234 })));
+    if (unit && !svcs.length && !kernel) return ok('-- No entries --\n');
+    let entries = kernel
+      ? ctx.state.kernelLog.map((l) => ({ ...l, svc: 'kernel', pid: 0 }))
+      : [...svcs.flatMap((s) => s.logs.map((l) => ({ ...l, svc: s.name, pid: s.mainPid ?? 1234 }))), ...(unit ? [] : ctx.state.kernelLog.map((l) => ({ ...l, svc: 'kernel', pid: 0 })))];
     entries.sort((a, b) => a.time.localeCompare(b.time));
     const parseTime = (v: string): string => {
       const now = ctx.state.now.getTime();
@@ -199,7 +203,7 @@ const journalctl: CommandDef = {
           const [d, t] = e.time.split(' ');
           const [, mo, dd] = d.split('-');
           const color = PRIOS.indexOf(e.priority) <= 3 ? '\x1b[31m' : e.priority === 'warning' ? '\x1b[33m' : '';
-          return `${mons[+mo - 1]} ${dd} ${t} ${ctx.state.host} ${e.svc}[${e.pid}]: ${color}${e.message}${color ? '\x1b[0m' : ''}`;
+          return `${mons[+mo - 1]} ${dd} ${t} ${ctx.state.host} ${e.svc === 'kernel' ? 'kernel' : `${e.svc}[${e.pid}]`}: ${color}${e.message}${color ? '\x1b[0m' : ''}`;
         }),
       ),
     );

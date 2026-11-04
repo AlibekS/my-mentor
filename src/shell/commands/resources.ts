@@ -2,6 +2,7 @@ import { fail, ok, type CommandDef } from '../types';
 import { humanSize, joinLines, parseArgs } from '../args';
 import { abs } from '../cmdutil';
 import { FsErr, errText } from '../vfs';
+import { rootDeltaBytes } from '../procstate';
 
 const df: CommandDef = {
   name: 'df',
@@ -9,9 +10,10 @@ const df: CommandDef = {
   usage: 'df [-h] [-i]',
   run(args, _s, ctx) {
     const h = args.some((a) => a.includes('h'));
-    const disks = ctx.state.resources.disks;
+    const delta = rootDeltaBytes(ctx.state, ctx.fs.totalSize(ctx.fs.root)) / 1024 ** 3;
+    const disks = ctx.state.resources.disks.map((d) => (d.mount === '/' ? { ...d, usedGb: Math.min(d.sizeGb, Math.max(0, d.usedGb + delta)) } : d));
     if (args.includes('-i')) {
-      return ok('Filesystem      Inodes  IUsed   IFree IUse% Mounted on\n' + joinLines(disks.map((d) => `${d.fs.padEnd(15)} 3276800 ${d.usedGb > d.sizeGb * 0.95 ? '3276800       0  100%' : ' 412032 2864768   13%'} ${d.mount}`)));
+      return ok('Filesystem      Inodes  IUsed   IFree IUse% Mounted on\n' + joinLines(disks.map((d) => `${d.fs.padEnd(15)} 3276800 ${d.inodesFull ? '3276800       0  100%' : ' 412032 2864768   13%'} ${d.mount}`)));
     }
     const head = h ? 'Filesystem      Size  Used Avail Use% Mounted on\n' : 'Filesystem     1K-blocks     Used Available Use% Mounted on\n';
     const fmt = (gb: number) => (h ? (gb >= 10 ? Math.round(gb) + 'G' : gb.toFixed(1) + 'G') : String(Math.round(gb * 1024 * 1024)));
@@ -97,8 +99,22 @@ const free: CommandDef = {
 
 const lsof: CommandDef = {
   name: 'lsof',
-  summary: 'открытые файлы и порты: lsof -i :8080, lsof +L1 (удалённые, но открытые файлы)',
+  summary: 'открытые файлы и порты: lsof -i :8080, lsof +L1 (удалённые, но открытые файлы — держат место на диске)',
   run(args, _s, ctx) {
+    if (args.includes('+L1') || args.length === 0) {
+      if (ctx.user !== 'root' && ctx.state.deletedOpen.some((f) => ctx.state.processes.find((p) => p.pid === f.pid)?.user !== ctx.user))
+        return { stdout: '', stderr: 'lsof: WARNING: не все процессы видны — запусти через sudo\n', exitCode: 1 };
+      const rows = (args.includes('+L1') ? ctx.state.deletedOpen.map((f) => ({ ...f, del: true })) : [...ctx.state.openFiles.map((f) => ({ ...f, del: false })), ...ctx.state.deletedOpen.map((f) => ({ ...f, del: true }))]);
+      if (!rows.length) return { stdout: '', stderr: '', exitCode: 1 };
+      return ok(
+        'COMMAND     PID     USER   FD   TYPE DEVICE     SIZE/OFF NLINK     NODE NAME\n' +
+          joinLines(rows.map((f) => {
+            const p = ctx.state.processes.find((x) => x.pid === f.pid);
+            const size = f.del ? f.size ?? 0 : (() => { const n = ctx.fs.lookup(f.path); return n ? ctx.fs.size(n) : 0; })();
+            return `${f.command.slice(0, 9).padEnd(9)} ${String(f.pid).padStart(6)} ${(p?.user ?? 'root').padEnd(8)}    3w   REG    8,1 ${String(size).padStart(12)}     ${f.del ? 0 : 1}   131074 ${f.path}${f.del ? ' (deleted)' : ''}`;
+          })),
+      );
+    }
     const i = args.indexOf('-i');
     if (i >= 0) {
       const port = (args[i + 1] ?? '').replace(':', '');

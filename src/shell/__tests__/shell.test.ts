@@ -227,3 +227,37 @@ describe('jq and API', () => {
     expect(s.run(`curl -s -H "Authorization: Bearer good" https://api.shop.kz/v1/orders | jq -r '.items[1].status'`).stdout).toBe('failed\n');
   });
 });
+
+describe('disk accounting', () => {
+  const GB = 1024 ** 3;
+  const mk = () =>
+    new Shell({
+      resources: { disks: [{ fs: '/dev/sda1', sizeGb: 50, usedGb: 48, mount: '/' }] },
+      files: { '/var/log/app/app.log': { content: '', size: 10 * GB }, '/var/crash/core.1234': { content: '', size: 5 * GB } },
+      processes: [{ pid: 777, user: 'root', cpu: 1, mem: 1, vsz: 1, rss: 1, stat: 'S', start: '1', time: '1', command: '/opt/app/bin/app', service: 'app' }],
+      services: [{ name: 'app', description: 'App', active: 'active', enabled: true, mainPid: 777, logs: [], startProcess: { user: 'root', cpu: 1, mem: 1, vsz: 1, rss: 1, stat: 'S', start: '1', time: '1', command: '/opt/app/bin/app' } }],
+      openFiles: [{ path: '/var/log/app/app.log', pid: 777, command: 'app' }],
+    });
+  const used = (sh: Shell) => sh.run('df -h').stdout.split('\n')[1].split(/\s+/)[2];
+  it('rm of a closed file frees space', () => {
+    const sh = mk();
+    expect(used(sh)).toBe('48G');
+    sh.run('sudo rm /var/crash/core.1234');
+    expect(used(sh)).toBe('43G');
+  });
+  it('rm of an open file keeps space until the process restarts', () => {
+    const sh = mk();
+    sh.run('sudo rm /var/log/app/app.log');
+    expect(used(sh)).toBe('48G');
+    expect(sh.run('sudo lsof +L1').stdout).toContain('(deleted)');
+    sh.run('sudo systemctl restart app');
+    expect(used(sh)).toBe('38G');
+    expect(sh.run('sudo lsof +L1').exitCode).toBe(1);
+  });
+  it('truncate frees space without deleting', () => {
+    const sh = mk();
+    sh.run('sudo truncate -s 0 /var/log/app/app.log');
+    expect(used(sh)).toBe('38G');
+    expect(sh.fs.exists('/var/log/app/app.log')).toBe(true);
+  });
+});

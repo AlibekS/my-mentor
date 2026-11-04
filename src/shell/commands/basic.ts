@@ -160,6 +160,17 @@ const rev: CommandDef = {
 };
 
 const trueCmd: CommandDef = { name: 'true', summary: 'ничего не делает, код выхода 0', run: () => ok() };
+const colon: CommandDef = { name: ':', summary: 'пустая команда; «: > file» обнуляет файл', run: () => ok() };
+const nproc: CommandDef = { name: 'nproc', summary: 'число процессорных ядер — с ним сравнивают load average', run: (_a, _s, ctx) => ok(`${ctx.state.resources.cpus ?? 2}\n`) };
+const dmesg: CommandDef = {
+  name: 'dmesg',
+  summary: 'сообщения ядра (OOM killer, ошибки дисков). -T — человеческое время',
+  run: (args, _s, ctx) => {
+    if (ctx.user !== 'root') return fail('dmesg: read kernel buffer failed: Operation not permitted\n(Подсказка тренажёра: sudo dmesg -T или journalctl -k)');
+    const human = args.includes('-T');
+    return ok(joinLines(ctx.state.kernelLog.map((l, i) => (human ? `[${new Date(l.time.replace(' ', 'T')).toString().slice(0, 24)}] ${l.message}` : `[${(1987654.123 + i * 13.37).toFixed(6)}] ${l.message}`))));
+  },
+};
 const falseCmd: CommandDef = { name: 'false', summary: 'ничего не делает, код выхода 1', run: () => ({ stdout: '', stderr: '', exitCode: 1 }) };
 
 const sleep: CommandDef = { name: 'sleep', summary: 'пауза (в эмуляторе мгновенно)', run: (args) => (args.length ? ok() : fail('sleep: missing operand')) };
@@ -170,4 +181,4 @@ const exitCmd: CommandDef = {
   run: () => ok('logout\n'),
 };
 
-export default [echo, whoami, id, hostname, uname, date, uptime, history, clear, env, exportCmd, which, tr, rev, trueCmd, falseCmd, sleep, exitCmd];
+export default [echo, whoami, id, hostname, uname, date, uptime, history, clear, env, exportCmd, which, tr, rev, trueCmd, falseCmd, sleep, exitCmd, colon, nproc, dmesg];

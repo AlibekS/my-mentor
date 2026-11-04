@@ -74,7 +74,12 @@ export class Shell {
       kube: structuredClone(scenario.kube ?? { pods: [] }),
       nextPid: 4000,
       now: SIM_NOW,
+      openFiles: structuredClone(scenario.openFiles ?? []),
+      deletedOpen: [],
+      kernelLog: structuredClone(scenario.kernelLog ?? []),
+      fsBaseBytes: 0,
     };
+    this.state.fsBaseBytes = this.fs.totalSize(this.fs.root);
   }
 
   get home() {

@@ -88,7 +88,19 @@ export interface Resources {
   swapUsedMb: number;
   load: [number, number, number];
   uptime: string; // "12 days,  3:04"
-  disks: { fs: string; sizeGb: number; usedGb: number; mount: string }[];
+  disks: { fs: string; sizeGb: number; usedGb: number; mount: string; inodesFull?: boolean }[];
+  /** число ядер (nproc) */
+  cpus?: number;
+  /** доля iowait в top, % */
+  iowait?: number;
+}
+
+export interface OpenFile {
+  path: string;
+  pid: number;
+  command: string;
+  /** размер в байтах (заполняется при удалении файла) */
+  size?: number;
 }
 
 export interface FileSpec {
@@ -117,6 +129,10 @@ export interface Scenario {
   resources?: Partial<Resources>;
   /** Новые строки, «прилетающие» в файл при tail -f */
   streams?: Record<string, string[]>;
+  /** Файлы, открытые процессами (для lsof и «удалённых, но открытых» файлов) */
+  openFiles?: OpenFile[];
+  /** Сообщения ядра: journalctl -k, dmesg */
+  kernelLog?: JournalEntry[];
   /** docker/kubectl — свободная структура */
   docker?: { containers: { id: string; name: string; image: string; status: string; ports?: string; logs?: string }[] };
   kube?: {
@@ -140,6 +156,12 @@ export interface SystemState {
   kube: NonNullable<Scenario['kube']>;
   nextPid: number;
   now: Date;
+  openFiles: OpenFile[];
+  /** удалены из ФС, но ещё открыты процессом — место не освобождено */
+  deletedOpen: OpenFile[];
+  kernelLog: JournalEntry[];
+  /** суммарный размер ФС в момент старта сценария — база для df */
+  fsBaseBytes: number;
 }
 
 export interface ExecRecord {
