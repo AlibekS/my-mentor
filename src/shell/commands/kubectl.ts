@@ -1,6 +1,6 @@
 import { fail, ok, type CommandDef, type KubeDeployment, type KubePod } from '../types';
 import { joinLines } from '../args';
-import { describePod, readyCount, rolloutPods } from '../kube';
+import { describePod, podOf, readyCount, rolloutPods } from '../kube';
 
 /**
  * kubectl (симуляция). Состояние кластера — в сценарии: деплойменты с «поведением»
@@ -22,14 +22,21 @@ const kubectl: CommandDef = {
     let replicas: number | undefined;
     let limits = '';
     let toRev: number | undefined;
+    let selector: string | undefined;
     const pos: string[] = [];
     for (let i = 0; i < argsIn.length; i++) {
       const a = argsIn[i];
       if (a === '-n' || a === '--namespace') ns = argsIn[++i];
       else if (a.startsWith('--namespace=')) ns = a.slice(12);
       else if (a === '-A' || a === '--all-namespaces') allNs = true;
-      else if (a === '-o') output = argsIn[++i];
+      else if (a === '-o' || a === '--output') output = argsIn[++i];
       else if (a.startsWith('-o=') || a.startsWith('--output=')) output = a.split('=')[1];
+      else if (/^-o[a-z]/.test(a)) output = a.slice(2); // -owide
+      else if (a === '-l' || a === '--selector') selector = argsIn[++i];
+      else if (a.startsWith('--selector=') || a.startsWith('-l=')) selector = a.slice(a.indexOf('=') + 1);
+      else if (/^-l\w/.test(a)) selector = a.slice(2);
+      else if (a.startsWith('--previous=')) previous = a.endsWith('true');
+      else if (/^-[it]+$/.test(a) || a === '--stdin' || a === '--tty' || a === '--all-containers' || a.startsWith('--all-containers=') || a === '--timestamps') continue;
       else if (a === '--tail') tail = parseInt(argsIn[++i], 10);
       else if (a.startsWith('--tail=')) tail = parseInt(a.slice(7), 10);
       else if (a === '-p' || a === '--previous') previous = true;
@@ -46,13 +53,16 @@ const kubectl: CommandDef = {
     wide ||= false;
     const inNs = <T extends { namespace?: string }>(x: T) => allNs || (x.namespace ?? 'default') === ns;
     const deps = (k.deployments ?? []).filter(inNs);
-    const pods = k.pods.filter(inNs);
+    // -l app=checkout — по метке app (в тренажёре метка = имя деплоймента)
+    const selVal = selector?.replace(/^\s*app\s*=\s*/, '').trim();
+    const pods = k.pods.filter(inNs).filter((p) => !selVal || p.deployment === selVal || p.name.startsWith(selVal + '-'));
     const findDep = (ref?: string): KubeDeployment | undefined => {
       if (!ref) return undefined;
       const name = ref.replace(/^(deployment|deploy|deployments)(\.apps)?\//, '');
       return deps.find((d) => d.name === name);
     };
     const notFound = (kind: string, name?: string) => fail(`Error from server (NotFound): ${kind} "${name ?? ''}" not found`);
+    if (pos[0] === 'events') pos.splice(0, 1, 'get', 'events');
     const [sub, a1, a2] = pos;
 
     switch (sub) {
@@ -109,8 +119,17 @@ const kubectl: CommandDef = {
         let kk = kind;
         if (kind.includes('/')) [kk, name] = kind.split('/');
         if (/^(po|pod|pods)$/.test(kk)) {
+          if (!name) return pods.length ? ok(pods.map((x) => describePod(x, k)).join('\n\n')) : ok(`No resources found in ${ns} namespace.\n`);
           const p = pods.find((x) => x.name === name);
           return p ? ok(describePod(p, k)) : notFound('pods', name);
+        }
+        if (/^(svc|service|services)$/.test(kk)) {
+          const sv = (k.services ?? []).filter(inNs).find((x) => x.name === name);
+          if (!sv) return notFound('services', name);
+          const sel = sv.selector?.replace(/^app=/, '');
+          const port = /^(\d+)/.exec(sv.ports)?.[1] ?? '80';
+          const eps = pods.filter((p) => p.deployment === sel && p.status === 'Running' && (p.ready ?? '1/1').startsWith('1')).map((p) => `${p.ip}:${port}`);
+          return ok(`Name:              ${sv.name}\nNamespace:         ${sv.namespace ?? 'default'}\nSelector:          ${sv.selector ?? '<none>'}\nType:              ${sv.type}\nIP:                ${sv.clusterIp}\nPort:              <unset>  ${sv.ports}\nEndpoints:         ${eps.join(',') || '<none>'}\n`);
         }
         if (/^(deploy|deployment|deployments)$/.test(kk)) {
           const d = findDep(name);
@@ -123,7 +142,15 @@ const kubectl: CommandDef = {
         let p: KubePod | undefined;
         if (a1?.includes('/')) {
           const d = findDep(a1);
-          p = d && pods.find((x) => x.deployment === d.name);
+          p = d && pods.find(podOf(k, d));
+        } else if (!a1 && selVal) {
+          // kubectl logs -l app=x — по первому подходящему поду (в жизни — по всем)
+          const all = pods.filter((x) => !previous || x.previousLogs);
+          if (!all.length) return ok('');
+          const parts = all.map((x) => (previous ? x.previousLogs : x.logs) ?? '').filter(Boolean);
+          let l = parts.join('\n').split('\n').filter(Boolean);
+          if (tail !== undefined) l = l.slice(-tail);
+          return ok(joinLines(l));
         } else p = pods.find((x) => x.name === a1);
         if (!p) return notFound('pods', a1);
         if (previous && !p.previousLogs) return fail(`Error from server (BadRequest): previous terminated container "${p.deployment ?? 'app'}" in pod "${p.name}" not found`);
@@ -165,13 +192,14 @@ const kubectl: CommandDef = {
         if (!d) return notFound('deployments.apps', a1);
         if (replicas === undefined || Number.isNaN(replicas)) return fail('error: required flag(s) "replicas" not set');
         d.replicas = replicas;
-        const spec = k.pods.filter((p) => p.deployment === d.name);
-        if (spec.length > replicas) k.pods = k.pods.filter((p) => !(p.deployment === d.name && spec.indexOf(p) >= replicas));
+        const mine = podOf(k, d);
+        const spec = k.pods.filter(mine);
+        if (spec.length > replicas) k.pods = k.pods.filter((p) => !(mine(p) && spec.indexOf(p) >= replicas));
         else if (spec.length < replicas) {
-          const keep = k.pods.filter((p) => p.deployment === d.name);
+          const keep = k.pods.filter(mine);
           rolloutPods(k, d);
-          const fresh = k.pods.filter((p) => p.deployment === d.name).slice(keep.length);
-          k.pods = [...k.pods.filter((p) => p.deployment !== d.name), ...keep, ...fresh];
+          const fresh = k.pods.filter(mine).slice(keep.length);
+          k.pods = [...k.pods.filter((p) => !mine(p)), ...keep, ...fresh];
         }
         return ok(`deployment.apps/${d.name} scaled\n`);
       }
@@ -207,16 +235,17 @@ const kubectl: CommandDef = {
         const p = pods.find((x) => x.name === name);
         if (!p) return notFound('pods', name);
         k.pods = k.pods.filter((x) => x !== p);
-        const d = (k.deployments ?? []).find((x) => x.name === p.deployment);
+        const d = (k.deployments ?? []).find((x) => x.name === p.deployment && (x.namespace ?? k.namespace ?? 'default') === (p.namespace ?? k.namespace ?? 'default'));
         if (d) {
           // контроллер создаёт замену
-          const others = k.pods.filter((x) => x.deployment === d.name);
+          const mine = podOf(k, d);
+          const others = k.pods.filter(mine);
           const before = d.replicas;
           d.replicas = 1;
           const saved = k.pods;
-          k.pods = k.pods.filter((x) => x.deployment !== d.name);
+          k.pods = k.pods.filter((x) => !mine(x));
           rolloutPods(k, d);
-          const fresh = k.pods.filter((x) => x.deployment === d.name);
+          const fresh = k.pods.filter(mine);
           k.pods = [...saved, ...fresh];
           d.replicas = before;
           void others;
@@ -229,7 +258,8 @@ const kubectl: CommandDef = {
         return fail('error: в тренажёре: kubectl top pods | top nodes');
       }
       case 'exec': {
-        const p = pods.find((x) => x.name === a1);
+        const dx = a1?.includes('/') ? findDep(a1) : undefined;
+        const p = pods.find((x) => x.name === a1) ?? (dx ? pods.find(podOf(k, dx)) : undefined);
         if (!p) return notFound('pods', a1);
         if (p.status !== 'Running') return fail(`error: unable to upgrade connection: container not found ("${p.deployment ?? 'app'}")`);
         const cmd = argsIn.slice(argsIn.indexOf('--') + 1);
@@ -238,7 +268,9 @@ const kubectl: CommandDef = {
       }
       case 'config':
         if (a1 === 'current-context') return ok('prod-eu-1\n');
-        return fail('в тренажёре: kubectl config current-context');
+        if (a1 === 'get-contexts') return ok('CURRENT   NAME         CLUSTER      AUTHINFO     NAMESPACE\n*         prod-eu-1    prod-eu-1    l3-support   ' + (k.namespace ?? 'default') + '\n          staging-1    staging-1    l3-support   default\n');
+        if (a1 === 'view') return ok(`apiVersion: v1\nkind: Config\ncurrent-context: prod-eu-1\n`);
+        return fail('в тренажёре: kubectl config current-context | get-contexts');
       default:
         return fail(`error: unknown command "${sub ?? ''}" for "kubectl"`);
     }

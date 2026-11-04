@@ -7,8 +7,26 @@ import type { LogEntry } from './types';
  */
 type Pred = (e: LogEntry) => boolean;
 
+/** Условие field:value (value — слово, шаблон*, "фраза") */
+function fieldPred(field: string, raw: string): Pred {
+  const phrase = raw.startsWith('"');
+  const val = raw.replace(/^"|"$/g, '');
+  const esc = (x: string) => x.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+  const re = new RegExp(`^${esc(val)}$`, 'i');
+  // в тексте сообщения шаблон ищется по словам: msg:Connection* найдёт «… Connection is not available»
+  const reMsg = new RegExp(`(^|\\W)${esc(val)}`, 'i');
+  return (x) => {
+    const v = String(x[field] ?? '');
+    if (phrase) return v.toLowerCase().includes(val.toLowerCase());
+    if (re.test(v)) return true;
+    return field === 'msg' && (val.includes('*') ? reMsg.test(v) : v.toLowerCase().includes(val.toLowerCase()));
+  };
+}
+
 export function compileKql(q: string): Pred {
-  const toks = q.match(/"[^"]*"|\(|\)|[^\s()]+/g) ?? [];
+  // «service : x», «latency_ms > 500» — пробелы вокруг операторов допустимы
+  const norm = q.replace(/("[^"]*")|\s*(:|>=|<=|>|<)\s*/g, (m, ph, op) => (ph ? ph : op));
+  const toks = norm.match(/[\w.]+(?::|>=|<=|>|<)(?:"[^"]*"|\([^)]*\)|[^\s()]+)|"[^"]*"|\(|\)|[^\s()]+/g) ?? [];
   let p = 0;
   const peek = () => toks[p]?.toUpperCase();
   const term = (): Pred => {
@@ -23,26 +41,32 @@ export function compileKql(q: string): Pred {
       const e = term();
       return (x) => !e(x);
     }
-    const m = /^([\w.]+)(:|>=|<=|>|<)(.+)$/.exec(t);
+    const m = /^([\w.]+)(:|>=|<=|>|<)(.+)$/s.exec(t);
     if (m) {
       const [, field, op, raw] = m;
-      const val = raw.replace(/^"|"$/g, '');
       if (op !== ':') {
-        const n = parseFloat(val);
+        const n = parseFloat(raw.replace(/^"|"$/g, ''));
+        if (Number.isNaN(n)) throw new Error(`после «${field}${op}» ожидалось число`);
         return (x) => {
           const v = Number(x[field]);
           return op === '>' ? v > n : op === '<' ? v < n : op === '>=' ? v >= n : v <= n;
         };
       }
-      const re = new RegExp(`^${val.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')}$`, 'i');
-      const phrase = raw.startsWith('"');
-      return (x) => {
-        const v = String(x[field] ?? '');
-        return phrase ? v.toLowerCase().includes(val.toLowerCase()) : re.test(v) || (field === 'msg' && v.toLowerCase().includes(val.toLowerCase()));
-      };
+      // service:(payments OR checkout)
+      if (raw.startsWith('(') && raw.endsWith(')')) {
+        const inner = raw.slice(1, -1).match(/"[^"]*"|[^\s]+/g) ?? [];
+        const alts: Pred[][] = [[]];
+        for (const w of inner) {
+          if (w.toUpperCase() === 'OR') alts.push([]);
+          else if (w.toUpperCase() !== 'AND') alts[alts.length - 1].push(fieldPred(field, w));
+        }
+        return (x) => alts.some((g) => g.length > 0 && g.every((f) => f(x)));
+      }
+      return fieldPred(field, raw);
     }
     const word = t.replace(/^"|"$/g, '').toLowerCase();
-    return (x) => x.msg.toLowerCase().includes(word);
+    // голое слово ищется в сообщении, а id (trace_id, request_id …) — точным совпадением
+    return (x) => x.msg.toLowerCase().includes(word) || Object.entries(x).some(([k, v]) => /(^|_)id$/.test(k) && String(v).toLowerCase() === word);
   };
   const andExpr = (): Pred => {
     let l = term();

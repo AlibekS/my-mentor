@@ -34,7 +34,7 @@ export function behaviorFor(d: KubeDeployment): KubePodSpec {
 /** Пересоздать поды деплоймента (rollout restart / смена образа / undo) */
 export function rolloutPods(k: KubeState, d: KubeDeployment, age = '5s') {
   const ns = d.namespace ?? k.namespace ?? 'default';
-  k.pods = k.pods.filter((p) => !(p.deployment === d.name && (p.namespace ?? 'default') === ns));
+  k.pods = k.pods.filter((p) => !(p.deployment === d.name && (p.namespace ?? k.namespace ?? 'default') === ns));
   const spec = behaviorFor(d);
   const rs = hash(d.name + d.image + (d.memoryLimit ?? '') + JSON.stringify(d.env ?? {}), 10);
   for (let i = 0; i < d.replicas; i++) {
@@ -56,30 +56,36 @@ export function rolloutPods(k: KubeState, d: KubeDeployment, age = '5s') {
   }
 }
 
+/** Под принадлежит деплойменту: совпадают имя и namespace (checkout в prod ≠ checkout в staging) */
+export const podOf = (k: KubeState, d: KubeDeployment) => (p: KubePod) =>
+  p.deployment === d.name && (p.namespace ?? k.namespace ?? 'default') === (d.namespace ?? k.namespace ?? 'default');
+
 export function initKube(k: KubeState) {
   for (const d of k.deployments ?? []) {
     if (!d.history?.length) d.history = [{ image: d.image }];
-    if (!k.pods.some((p) => p.deployment === d.name)) rolloutPods(k, d, '3d');
+    if (!k.pods.some(podOf(k, d))) rolloutPods(k, d, '3d');
   }
 }
 
 export function readyCount(k: KubeState, d: KubeDeployment): number {
-  return k.pods.filter((p) => p.deployment === d.name && p.status === 'Running' && (p.ready ?? '1/1').startsWith('1')).length;
+  return k.pods.filter((p) => podOf(k, d)(p) && p.status === 'Running' && (p.ready ?? '1/1').startsWith('1')).length;
 }
 
 export function describePod(p: KubePod, k: KubeState): string {
   if (p.describe) return p.describe;
   const dep = k.deployments?.find((d) => d.name === p.deployment);
   const waiting = p.status !== 'Running' && p.status !== 'Completed';
-  const state = p.status === 'Running' ? `Running\n      Started:      Wed, 04 Nov 2026 14:${p.age === '5s' ? '30' : '00'}:00 +0500` : p.status === 'Pending' ? 'Waiting\n      Reason:       ContainerCreating' : `Waiting\n      Reason:       ${p.status}`;
+  // под не назначен ни на один узел (FailedScheduling) — ни узла, ни IP
+  const unscheduled = p.status === 'Pending' && (p.events ?? []).some((e) => /FailedScheduling/.test(e));
+  const state = p.status === 'Running' ? `Running\n      Started:      Wed, 04 Nov 2026 14:${p.age === '5s' ? '30' : '00'}:00 +0500` : p.status === 'Pending' ? (/FailedScheduling/.test((p.events ?? []).join(' ')) ? 'Waiting\n      Reason:       Pending' : 'Waiting\n      Reason:       ContainerCreating') : `Waiting\n      Reason:       ${p.status}`;
   const last = p.lastReason ? `\n    Last State:     Terminated\n      Reason:       ${p.lastReason}\n      Exit Code:    ${p.exitCode ?? 1}\n      Started:      Wed, 04 Nov 2026 14:29:31 +0500\n      Finished:     Wed, 04 Nov 2026 14:29:33 +0500` : '';
   const env = Object.entries(p.env ?? dep?.env ?? {}).map(([kk, v]) => `      ${kk}:  ${v}`).join('\n');
   const events = p.events?.length ? p.events.map((e) => `  ${e}`).join('\n') : waiting ? '  Warning  BackOff  30s (x12 over 6m)  kubelet  Back-off restarting failed container' : '  Normal   Started  2m  kubelet  Started container';
   return `Name:             ${p.name}
 Namespace:        ${p.namespace ?? 'default'}
-Node:             ${p.node ?? 'worker-1'}/10.0.5.1${(p.node ?? '1').slice(-1)}
+Node:             ${unscheduled ? '<none>' : `${p.node ?? 'worker-1'}/10.0.5.1${(p.node ?? '1').slice(-1)}`}
 Status:           ${p.status === 'Running' || p.status === 'Pending' ? p.status : 'Running'}
-IP:               ${p.ip ?? '10.244.1.10'}
+IP:               ${unscheduled ? '' : p.ip ?? '10.244.1.10'}
 Controlled By:    ${p.deployment ? `ReplicaSet/${p.name.split('-').slice(0, -1).join('-')}` : '<none>'}
 Containers:
   ${dep?.container ?? p.deployment ?? 'app'}:

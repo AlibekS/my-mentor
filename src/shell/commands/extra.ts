@@ -320,4 +320,154 @@ const paste: CommandDef = {
   },
 };
 
-export default [xargs, tac, seq, basename, dirname, stat, egrep, fgrep, zcat, zgrep, zless, timeout, nc, service, printenv, flock, paste];
+
+/** Простой diff по строкам (LCS) в обычном формате: 3c3, < старое, --- , > новое */
+const diff: CommandDef = {
+  name: 'diff',
+  summary: 'сравнить два файла построчно: diff app.env app.env.bak (< — первый файл, > — второй). -u — унифицированный формат',
+  usage: 'diff [-u] файл1 файл2',
+  run(args, _s, ctx) {
+    const files = args.filter((a) => !a.startsWith('-') || a === '-');
+    const unified = args.some((a) => /^-\w*u/.test(a) || a === '--unified');
+    if (files.length !== 2) return fail("diff: missing operand\nTry 'diff --help' for more information.", 2);
+    const r = readInputs('diff', files, '', ctx);
+    if (r.failed) return { stdout: '', stderr: r.stderr, exitCode: 2 };
+    const a = lines(r.inputs[0].content);
+    const b = lines(r.inputs[1].content);
+    if (a.join('\n') === b.join('\n')) return ok();
+    // LCS
+    const n = a.length;
+    const m = b.length;
+    const L: number[][] = Array.from({ length: n + 1 }, () => new Array(m + 1).fill(0));
+    for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) L[i][j] = a[i] === b[j] ? L[i + 1][j + 1] + 1 : Math.max(L[i + 1][j], L[i][j + 1]);
+    const ops: { t: '=' | '-' | '+'; s: string; i: number; j: number }[] = [];
+    let i = 0;
+    let j = 0;
+    while (i < n || j < m) {
+      if (i < n && j < m && a[i] === b[j]) ops.push({ t: '=', s: a[i++], i, j: j++ });
+      else if (j < m && (i >= n || L[i][j + 1] >= L[i + 1][j])) ops.push({ t: '+', s: b[j++], i, j });
+      else ops.push({ t: '-', s: a[i++], i, j });
+    }
+    let out = '';
+    if (unified) {
+      out += `--- ${files[0]}\n+++ ${files[1]}\n@@ -1,${n} +1,${m} @@\n`;
+      for (const o of ops) out += (o.t === '=' ? ' ' : o.t) + o.s + '\n';
+      return { stdout: out, stderr: '', exitCode: 1 };
+    }
+    // группы изменений
+    for (let k = 0; k < ops.length; ) {
+      if (ops[k].t === '=') {
+        k++;
+        continue;
+      }
+      const start = k;
+      while (k < ops.length && ops[k].t !== '=') k++;
+      const grp = ops.slice(start, k);
+      const del = grp.filter((o) => o.t === '-');
+      const ins = grp.filter((o) => o.t === '+');
+      const ai = ops.slice(0, start).filter((o) => o.t !== '+').length;
+      const bj = ops.slice(0, start).filter((o) => o.t !== '-').length;
+      const rng = (s0: number, len: number) => (len <= 1 ? String(s0 + (len ? 1 : 0)) : `${s0 + 1},${s0 + len}`);
+      const code = del.length && ins.length ? 'c' : del.length ? 'd' : 'a';
+      out += `${del.length ? rng(ai, del.length) : String(ai)}${code}${ins.length ? rng(bj, ins.length) : String(bj)}\n`;
+      for (const o of del) out += `< ${o.s}\n`;
+      if (del.length && ins.length) out += '---\n';
+      for (const o of ins) out += `> ${o.s}\n`;
+    }
+    return { stdout: out, stderr: '', exitCode: 1 };
+  },
+};
+
+const nl: CommandDef = {
+  name: 'nl',
+  summary: 'пронумеровать строки (как cat -n, но пустые строки не нумерует)',
+  run(args, stdin, ctx) {
+    const r = readInputs('nl', args.filter((a) => !a.startsWith('-')), stdin, ctx);
+    let k = 0;
+    const all = args.includes('-ba');
+    const out = r.inputs.flatMap((x) => lines(x.content)).map((l) => (l.trim() || all ? `${String(++k).padStart(6)}\t${l}` : l));
+    return { stdout: joinLines(out), stderr: r.stderr, exitCode: r.failed ? 1 : 0 };
+  },
+};
+
+const groups: CommandDef = {
+  name: 'groups',
+  summary: 'группы пользователя: groups, groups shop',
+  run(args, _s, ctx) {
+    const u = args[0] ?? ctx.user;
+    if (u === 'root') return ok(`${args[0] ? 'root : ' : ''}root\n`);
+    const gs = ctx.fs.groups[u] ?? groupsFromEtc(ctx, u);
+    return ok(`${args[0] ? `${u} : ` : ''}${gs.join(' ')}\n`);
+  },
+};
+
+/** Группы пользователя из /etc/group (если сценарий их задал) */
+export function groupsFromEtc(ctx: CommandContext, u: string): string[] {
+  const n = ctx.fs.lookup('/etc/group');
+  const res = [u];
+  if (n && n.type === 'file')
+    for (const line of n.content.split('\n')) {
+      const [g, , , members] = line.split(':');
+      if (g && members?.split(',').includes(u) && !res.includes(g)) res.push(g);
+    }
+  return res;
+}
+
+const ll: CommandDef = {
+  name: 'll',
+  summary: 'алиас Ubuntu: ls -alF',
+  run: (args, stdin, ctx) => ctx.exec(['ls', '-alF', ...args], stdin),
+};
+
+const host: CommandDef = {
+  name: 'host',
+  summary: 'DNS-запрос (кратко): host домен',
+  run(args, _s, ctx) {
+    const name = args.find((a) => !a.startsWith('-'));
+    if (!name) return fail('Usage: host [-t type] name');
+    const h = ctx.state.network.hosts[name];
+    if (!h?.ip) return { stdout: `Host ${name} not found: 3(NXDOMAIN)\n`, stderr: '', exitCode: 1 };
+    return ok((h.cname ? `${name} is an alias for ${h.cname}.\n` : '') + `${h.cname ?? name} has address ${h.ip}\n`);
+  },
+};
+
+const getent: CommandDef = {
+  name: 'getent',
+  summary: 'записи системных баз: getent hosts имя (учитывает /etc/hosts, как приложения), getent passwd user',
+  usage: 'getent hosts|passwd|group ключ',
+  run(args, _s, ctx) {
+    const [db, key] = args;
+    if (db === 'hosts' || db === 'ahosts') {
+      if (!key) return fail('getent: укажи имя');
+      const r = resolveHost(ctx, key);
+      return r ? ok(`${r.ip.padEnd(15)} ${key}\n`) : { stdout: '', stderr: '', exitCode: 2 };
+    }
+    if (db === 'passwd' || db === 'group') {
+      const n = ctx.fs.lookup(`/etc/${db}`);
+      const rows = n && n.type === 'file' ? lines(n.content) : [];
+      const res = key ? rows.filter((l) => l.split(':')[0] === key) : rows;
+      return res.length ? ok(joinLines(res)) : { stdout: '', stderr: '', exitCode: 2 };
+    }
+    return fail(`Unknown database: ${db ?? ''}\nTry \`getent --help' or \`getent --usage' for more information.`, 1);
+  },
+};
+
+const lscpu: CommandDef = {
+  name: 'lscpu',
+  summary: 'информация о процессоре: число CPU (как nproc)',
+  run: (_a, _s, ctx) => {
+    const n = ctx.state.resources.cpus ?? 2;
+    return ok(`Architecture:            x86_64\nCPU(s):                  ${n}\n  On-line CPU(s) list:   0-${n - 1}\nModel name:              Intel(R) Xeon(R) Platinum 8375C CPU @ 2.90GHz\nThread(s) per core:      1\nCore(s) per socket:      ${n}\nSocket(s):               1\n`);
+  },
+};
+
+const w: CommandDef = {
+  name: 'w',
+  summary: 'кто в системе и load average',
+  run: (_a, _s, ctx) => {
+    const r = ctx.state.resources;
+    return ok(` ${ctx.state.now.toTimeString().slice(0, 8)} up ${r.uptime},  1 user,  load average: ${r.load.map((x) => x.toFixed(2)).join(', ')}\nUSER     TTY      FROM             LOGIN@   IDLE   JCPU   PCPU WHAT\n${ctx.user.padEnd(8)} pts/0    10.0.0.5         14:02    0.00s  0.04s  0.00s w\n`);
+  },
+};
+
+export default [diff, nl, groups, ll, host, getent, lscpu, w, xargs, tac, seq, basename, dirname, stat, egrep, fgrep, zcat, zgrep, zless, timeout, nc, service, printenv, flock, paste];

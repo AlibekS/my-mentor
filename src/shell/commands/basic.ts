@@ -27,10 +27,22 @@ const id: CommandDef = {
   name: 'id',
   summary: 'uid, gid и группы пользователя',
   run: (args, _s, ctx) => {
-    const u = args[0] ?? ctx.user;
+    const u = args.find((a) => !a.startsWith('-')) ?? ctx.user;
     if (u === 'root') return ok('uid=0(root) gid=0(root) groups=0(root)\n');
-    const gs = ctx.fs.groups[u] ?? [u];
-    return ok(`uid=1000(${u}) gid=1000(${u}) groups=${gs.map((g, i) => `${[1000, 4, 27][i] ?? 1000 + i}(${g})`).join(',')}\n`);
+    // uid/gid — из /etc/passwd сценария, группы — из /etc/group (или по умолчанию)
+    const pw = ctx.fs.lookup('/etc/passwd');
+    const row = pw && pw.type === 'file' ? pw.content.split('\n').find((l) => l.split(':')[0] === u) : undefined;
+    if (args[0] && !row && u !== ctx.user) return fail(`id: '${u}': no such user`);
+    const [, , uidS, gidS] = row?.split(':') ?? [];
+    const uid = uidS ?? '1000';
+    const gid = gidS ?? uid;
+    const gr = ctx.fs.lookup('/etc/group');
+    const extra = gr && gr.type === 'file' ? gr.content.split('\n').map((l) => l.split(':')).filter((x) => x[3]?.split(',').includes(u)).map((x) => `${x[2]}(${x[0]})`) : [];
+    const gs = ctx.fs.groups[u] ? ctx.fs.groups[u].map((g, i) => `${i === 0 ? gid : [4, 27][i - 1] ?? 1000 + i}(${g})`) : [`${gid}(${u})`, ...extra];
+    if (args.includes('-u')) return ok(uid + '\n');
+    if (args.includes('-g')) return ok(gid + '\n');
+    if (args.includes('-Gn') || args.includes('-nG')) return ok(gs.map((g) => g.replace(/^\d+\((.*)\)$/, '$1')).join(' ') + '\n');
+    return ok(`uid=${uid}(${u}) gid=${gid}(${u}) groups=${gs.join(',')}\n`);
   },
 };
 

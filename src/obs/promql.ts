@@ -67,7 +67,9 @@ function tokenize(s: string): string[] {
     }
     const m = /^(\d+(?:\.\d+)?(?:[smhd])?|[A-Za-z_:][\w:]*)/.exec(s.slice(i));
     if (!m) throw new PErr(`неожиданный символ «${c}»`);
-    out.push(m[0]);
+    // ключевые слова PromQL без учёта регистра: SUM … BY (…)
+    const low = m[0].toLowerCase();
+    out.push(AGG.includes(low) || FNS.includes(low) || low === 'by' || low === 'without' ? low : m[0]);
     i += m[0].length;
   }
   return out;
@@ -172,6 +174,7 @@ function parse(src: string): Node {
       eat(')');
       return { t: 'fn', name: t, args };
     }
+    if (/^[A-Za-z_]\w*$/.test(t) && tk[p + 1] === '(') throw new PErr(`функция «${t}» в тренажёре не поддерживается (есть: ${[...AGG, ...FNS].join(', ')})`);
     if (/^[A-Za-z_:]/.test(t) || t === '{') {
       let name = '';
       if (t !== '{') name = eat();
@@ -530,10 +533,19 @@ export function sameResult(a: QueryResult, b: QueryResult): { ok: boolean; reaso
   if (!a.ok) return { ok: false, reason: a.error };
   if (!b.ok) return { ok: false, reason: 'эталон с ошибкой: ' + b.error };
   if (a.series.length !== b.series.length) return { ok: false, reason: `Ожидалось рядов: ${b.series.length}, у тебя: ${a.series.length}.` };
-  const map = new Map(b.series.map((s) => [key(dropName(s.labels)), s]));
+  // метка, которой нет на другой стороне и которая одинакова во всех рядах, ничего не меняет:
+  // rate(x{service="checkout"}[5m]) и sum(rate(x{service="checkout"}[5m])) — один и тот же ряд
+  const keysOf = (r: QueryResult) => new Set(r.series.flatMap((x) => Object.keys(dropName(x.labels))));
+  const constant = (r: QueryResult, k: string) => new Set(r.series.map((x) => x.labels[k])).size === 1;
+  const aKeys = keysOf(a);
+  const bKeys = keysOf(b);
+  const norm = (r: QueryResult, other: Set<string>) => (l: Labels) => Object.fromEntries(Object.entries(dropName(l)).filter(([k]) => other.has(k) || !constant(r, k))) as Labels;
+  const na = norm(a, bKeys);
+  const nb = norm(b, aKeys);
+  const map = new Map(b.series.map((s) => [key(nb(s.labels)), s]));
   for (const s of a.series) {
-    const t = map.get(key(dropName(s.labels)));
-    if (!t) return { ok: false, reason: `Набор меток не совпадает: {${key(dropName(s.labels))}}` };
+    const t = map.get(key(na(s.labels)));
+    if (!t) return { ok: false, reason: `Набор меток не совпадает: {${key(na(s.labels))}}` };
     for (let i = 0; i < s.values.length; i++) {
       const x = s.values[i];
       const y = t.values[i];

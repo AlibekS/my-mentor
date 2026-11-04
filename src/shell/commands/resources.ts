@@ -9,9 +9,28 @@ const df: CommandDef = {
   summary: 'занятость файловых систем. -h в K/M/G, -i — inode',
   usage: 'df [-h] [-i]',
   run(args, _s, ctx) {
-    const h = args.some((a) => a.includes('h'));
+    const flags = args.filter((a) => a.startsWith('-')).join('');
+    const h = /h|H/.test(flags.replace(/--\w+/g, '')) || args.includes('--human-readable');
+    const typeCol = /T/.test(flags) || args.includes('--print-type');
     const delta = rootDeltaBytes(ctx.state, ctx.fs.totalSize(ctx.fs.root)) / 1024 ** 3;
-    const disks = ctx.state.resources.disks.map((d) => (d.mount === '/' ? { ...d, usedGb: Math.min(d.sizeGb, Math.max(0, d.usedGb + delta)) } : d));
+    let disks = ctx.state.resources.disks.map((d) => (d.mount === '/' ? { ...d, usedGb: Math.min(d.sizeGb, Math.max(0, d.usedGb + delta)) } : d));
+    // df ПУТЬ — только файловая система, где лежит путь (самая длинная точка монтирования)
+    const paths = args.filter((a) => !a.startsWith('-'));
+    if (paths.length) {
+      const chosen = new Set<(typeof disks)[number]>();
+      for (const p of paths) {
+        const ap = abs(ctx, p);
+        if (!ctx.fs.lookup(ap)) return fail(`df: ${p}: No such file or directory`);
+        const best = disks.filter((d) => ap === d.mount || ap.startsWith(d.mount === '/' ? '/' : d.mount + '/')).sort((x, y) => y.mount.length - x.mount.length)[0];
+        if (best) chosen.add(best);
+      }
+      disks = disks.filter((d) => chosen.has(d));
+    }
+    const fsType = (d: (typeof disks)[number]) => (d.fs === 'tmpfs' ? 'tmpfs' : 'ext4');
+    if (typeCol) {
+      const fmtT = (gb: number) => (h ? (gb >= 10 ? Math.round(gb) + 'G' : gb.toFixed(1) + 'G') : String(Math.round(gb * 1024 * 1024)));
+      return ok(`Filesystem     Type   ${h ? ' Size  Used Avail' : ' 1K-blocks      Used Available'} Use% Mounted on\n` + joinLines(disks.map((d) => `${d.fs.padEnd(15)}${fsType(d).padEnd(6)} ${fmtT(d.sizeGb).padStart(h ? 5 : 10)} ${fmtT(d.usedGb).padStart(h ? 5 : 10)} ${fmtT(Math.max(0, d.sizeGb - d.usedGb)).padStart(h ? 5 : 10)} ${(Math.round((d.usedGb / d.sizeGb) * 100) + '%').padStart(4)} ${d.mount}`)));
+    }
     if (args.includes('-i')) {
       return ok('Filesystem      Inodes  IUsed   IFree IUse% Mounted on\n' + joinLines(disks.map((d) => `${d.fs.padEnd(15)} 3276800 ${d.inodesFull ? '3276800       0  100%' : ' 412032 2864768   13%'} ${d.mount}`)));
     }
@@ -35,11 +54,11 @@ const du: CommandDef = {
   summary: 'размер каталогов/файлов. -s итог, -h в K/M/G, --max-depth=1 / -d 1 — по подкаталогам. Классика: du -sh /var/log/* | sort -h',
   usage: 'du [-sh] [-d N] путь...',
   run(args, _s, ctx) {
-    const a = parseArgs(args, ['d', 'max-depth'], ['s', 'h', 'a', 'c', 'd', 'max-depth']);
+    const a = parseArgs(args, ['d', 'max-depth'], ['s', 'h', 'a', 'c', 'd', 'max-depth', 'x', 'm', 'k', 'b', 'summarize', 'human-readable', 'one-file-system', 'L', 'P']);
     const paths = a.positional.length ? a.positional : ['.'];
-    const h = a.flags.has('h');
-    const depth = a.flags.has('s') ? 0 : parseInt(a.values.d ?? a.values['max-depth'] ?? '99', 10);
-    const fmt = (b: number) => (h ? humanSize(b) : String(Math.ceil(b / 1024)));
+    const h = a.flags.has('h') || a.flags.has('human-readable');
+    const depth = a.flags.has('s') || a.flags.has('summarize') ? 0 : parseInt(a.values.d ?? a.values['max-depth'] ?? '99', 10);
+    const fmt = (b: number) => (h ? humanSize(b) : a.flags.has('m') ? String(Math.ceil(b / 1024 ** 2)) : a.flags.has('b') ? String(b) : String(Math.ceil(b / 1024)));
     let out = '';
     let err = '';
     let total = 0;
@@ -77,17 +96,25 @@ const du: CommandDef = {
   },
 };
 
+/** Одна формула памяти для free и top: buff/cache, free и available согласованы */
+export function memView(r: { memTotalMb: number; memUsedMb: number }) {
+  const cache = Math.min(r.memTotalMb - r.memUsedMb, Math.round(r.memTotalMb * 0.15));
+  const freeMb = r.memTotalMb - r.memUsedMb - cache;
+  const avail = freeMb + Math.round(cache * 0.8);
+  return { cache, freeMb, avail };
+}
+
 const free: CommandDef = {
   name: 'free',
   summary: 'память и swap. -h в удобных единицах, -m в мегабайтах. Смотрите на available, а не на free!',
   usage: 'free [-h|-m]',
   run(args, _s, ctx) {
     const r = ctx.state.resources;
-    const h = args.includes('-h');
-    const cache = Math.min(r.memTotalMb - r.memUsedMb, Math.round(r.memTotalMb * 0.15));
-    const freeMb = r.memTotalMb - r.memUsedMb - cache;
-    const avail = freeMb + Math.round(cache * 0.8);
-    const f = (mb: number) => (h ? (mb >= 1024 ? (mb / 1024).toFixed(1) + 'Gi' : Math.round(mb) + 'Mi') : String(args.includes('-m') ? Math.round(mb) : Math.round(mb * 1024)));
+    const fl = args.join(' ');
+    const h = /(^|\s)-\w*h|--human/.test(fl);
+    const { cache, freeMb, avail } = memView(r);
+    const unit = /(^|\s)-\w*g|--giga|--gibi/.test(fl) ? 'g' : /(^|\s)-\w*m|--mega|--mebi/.test(fl) ? 'm' : /(^|\s)-\w*b|--bytes/.test(fl) ? 'b' : 'k';
+    const f = (mb: number) => (h ? (mb >= 1024 ? (mb / 1024).toFixed(1) + 'Gi' : Math.round(mb) + 'Mi') : String(unit === 'g' ? Math.floor(mb / 1024) : unit === 'm' ? Math.round(mb) : unit === 'b' ? Math.round(mb * 1024 * 1024) : Math.round(mb * 1024)));
     const w = 11;
     return ok(
       `${''.padEnd(15)}${'total'.padStart(w)}${'used'.padStart(w)}${'free'.padStart(w)}${'shared'.padStart(w)}${'buff/cache'.padStart(w)}${'available'.padStart(w)}\n` +
@@ -100,7 +127,28 @@ const free: CommandDef = {
 const lsof: CommandDef = {
   name: 'lsof',
   summary: 'открытые файлы и порты: lsof -i :8080, lsof +L1 (удалённые, но открытые файлы — держат место на диске)',
-  run(args, _s, ctx) {
+  run(argsIn, _s, ctx) {
+    // -n -P (без DNS/имён портов) ничего не меняют; -nP, -Pn тоже
+    const args = argsIn.filter((a) => !/^-[nPlV]+$/.test(a));
+    const fileArgs = args.filter((a) => a.startsWith('/'));
+    const pIdx = args.indexOf('-p');
+    if (pIdx >= 0 || fileArgs.length) {
+      const pid = pIdx >= 0 ? parseInt(args[pIdx + 1] ?? '', 10) : NaN;
+      const all = [...ctx.state.openFiles.map((f) => ({ ...f, del: false })), ...ctx.state.deletedOpen.map((f) => ({ ...f, del: true }))].filter((f) => (pIdx < 0 || f.pid === pid) && (!fileArgs.length || fileArgs.some((fa) => f.path === abs(ctx, fa) || f.path.startsWith(abs(ctx, fa) + '/'))));
+      const socks = pIdx >= 0 ? ctx.state.listeners.filter((l) => l.pid === pid) : [];
+      if (!all.length && !socks.length) return { stdout: '', stderr: '', exitCode: 1 };
+      return ok(
+        'COMMAND     PID     USER   FD   TYPE DEVICE     SIZE/OFF NLINK     NODE NAME\n' +
+          joinLines([
+            ...all.map((f) => {
+              const p = ctx.state.processes.find((x) => x.pid === f.pid);
+              const size = f.del ? f.size ?? 0 : (() => { const n = ctx.fs.lookup(f.path); return n ? ctx.fs.size(n) : 0; })();
+              return `${f.command.slice(0, 9).padEnd(9)} ${String(f.pid).padStart(6)} ${(p?.user ?? 'root').padEnd(8)}    3w   REG    8,1 ${String(size).padStart(12)}     ${f.del ? 0 : 1}   131074 ${f.path}${f.del ? ' (deleted)' : ''}`;
+            }),
+            ...socks.map((l) => `${l.process.slice(0, 9).padEnd(9)} ${String(l.pid).padStart(6)} ${(ctx.state.processes.find((x) => x.pid === l.pid)?.user ?? 'root').padEnd(8)}    6u  IPv4  12345          0t0       ${l.proto.toUpperCase()} ${l.local.replace('0.0.0.0', '*')} (LISTEN)`),
+          ]),
+      );
+    }
     if (args.includes('+L1') || args.length === 0) {
       if (ctx.user !== 'root' && ctx.state.deletedOpen.some((f) => ctx.state.processes.find((p) => p.pid === f.pid)?.user !== ctx.user))
         return { stdout: '', stderr: 'lsof: WARNING: не все процессы видны — запусти через sudo\n', exitCode: 1 };
@@ -117,7 +165,9 @@ const lsof: CommandDef = {
     }
     const i = args.indexOf('-i');
     if (i >= 0) {
-      const port = (args[i + 1] ?? '').replace(':', '');
+      // -i :80, -i tcp:80, -i TCP, -i (все)
+      const spec = args[i + 1] && !args[i + 1].startsWith('-') ? args[i + 1] : '';
+      const port = /:(\d+)$/.exec(spec)?.[1] ?? (/^\d+$/.test(spec) ? spec : '');
       const ls = ctx.state.listeners.filter((l) => !port || l.local.endsWith(':' + port));
       if (!ls.length) return { stdout: '', stderr: '', exitCode: 1 };
       return ok('COMMAND     PID     USER   FD   TYPE DEVICE SIZE/OFF NODE NAME\n' + joinLines(ls.map((l) => {

@@ -98,6 +98,12 @@ export async function gradeSql(dataset: string, studentSql: string, solutionSql:
   try {
     const result = runQuery(db1, studentSql);
     const expected = runQuery(db2, solutionSql);
+    // EXPLAIN QUERY PLAN: номера узлов плана зависят от формы запроса — сравниваем только detail (SCAN/SEARCH …)
+    const isPlan = (r: QueryResult) => r.ok && r.columns.join(',') === 'id,parent,notused,detail';
+    if (isPlan(result) && isPlan(expected) && result.ok && expected.ok) {
+      const det = (r: typeof result & { ok: true }) => ({ ...r, columns: ['detail'], rows: r.rows.map((x) => [String(x[3]).replace(/ USING (COVERING )?INDEX .*$/, (m) => m)]) });
+      return { ...compareResults(det(result), det(expected), false), result };
+    }
     return { ...compareResults(result, expected, ordered), result };
   } finally {
     db1.close();

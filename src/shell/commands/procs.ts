@@ -1,6 +1,7 @@
 import { fail, ok, type CommandContext, type CommandDef, type Proc } from '../types';
 import { joinLines } from '../args';
 import { releaseProcess } from '../procstate';
+import { memView } from './resources';
 
 function psLine(p: Proc) {
   return `${p.user.padEnd(10)} ${String(p.pid).padStart(6)} ${p.cpu.toFixed(1).padStart(4)} ${p.mem.toFixed(1).padStart(4)} ${String(p.vsz).padStart(7)} ${String(p.rss).padStart(6)} ?        ${p.stat.padEnd(4)} ${p.start.padEnd(5)} ${p.time.padStart(6)} ${p.command}`;
@@ -129,15 +130,15 @@ const top: CommandDef = {
   run(_a, _s, ctx) {
     const r = ctx.state.resources;
     const procs = [...ctx.state.processes].sort((a, b) => b.cpu - a.cpu);
-    const free = r.memTotalMb - r.memUsedMb;
+    const { cache, freeMb: free, avail } = memView(r);
     let out = `top - ${ctx.state.now.toTimeString().slice(0, 8)} up ${r.uptime},  2 users,  load average: ${r.load.map((x) => x.toFixed(2)).join(', ')}\n`;
     out += `Tasks: ${procs.length} total,   1 running, ${procs.length - 1} sleeping,   0 stopped,   ${procs.filter((p) => p.stat.includes('Z')).length} zombie\n`;
     const cpus = r.cpus ?? 2;
     const us = Math.min(99, procs.reduce((s, p) => s + p.cpu, 0) / cpus);
     const wa = r.iowait ?? 0.3;
     out += `%Cpu(s): ${us.toFixed(1)} us,  1.2 sy,  0.0 ni, ${Math.max(0, 98.5 - us - wa).toFixed(1)} id, ${wa.toFixed(1)} wa,  0.0 hi,  0.1 si,  0.0 st\n`;
-    out += `MiB Mem :  ${r.memTotalMb.toFixed(1)} total,  ${free.toFixed(1)} free,  ${r.memUsedMb.toFixed(1)} used,   512.0 buff/cache\n`;
-    out += `MiB Swap:  ${r.swapTotalMb.toFixed(1)} total,  ${(r.swapTotalMb - r.swapUsedMb).toFixed(1)} free,  ${r.swapUsedMb.toFixed(1)} used.  ${(free + 400).toFixed(1)} avail Mem\n\n`;
+    out += `MiB Mem :  ${r.memTotalMb.toFixed(1)} total,  ${free.toFixed(1)} free,  ${r.memUsedMb.toFixed(1)} used,  ${cache.toFixed(1)} buff/cache\n`;
+    out += `MiB Swap:  ${r.swapTotalMb.toFixed(1)} total,  ${(r.swapTotalMb - r.swapUsedMb).toFixed(1)} free,  ${r.swapUsedMb.toFixed(1)} used.  ${avail.toFixed(1)} avail Mem\n\n`;
     out += '    PID USER      PR  NI    VIRT    RES  S  %CPU  %MEM     TIME+ COMMAND\n';
     out += joinLines(
       procs.map(

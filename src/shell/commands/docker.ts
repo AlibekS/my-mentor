@@ -35,12 +35,14 @@ const docker: CommandDef = {
         return ok('CONTAINER ID   IMAGE                       STATUS                          PORTS                    NAMES\n' + joinLines(list.map((c) => `${c.id.slice(0, 12).padEnd(14)} ${c.image.padEnd(27)} ${c.status.padEnd(31)} ${(c.ports ?? '').padEnd(24)} ${c.name}`)));
       }
       case 'logs': {
-        const name = rest.filter((x, i) => !x.startsWith('-') && !['--tail', '-n', '--since'].includes(rest[i - 1]))[0];
+        const name = rest.filter((x, i) => !x.startsWith('-') && !['--tail', '-n', '--since', '--until'].includes(rest[i - 1]))[0];
         const c = find(cs, name);
         if (!c) return nf(name);
         const ti = Math.max(rest.indexOf('--tail'), rest.indexOf('-n'));
+        const teq = rest.find((r) => r.startsWith('--tail=') || r.startsWith('-n='));
+        const tailN = teq ? teq.slice(teq.indexOf('=') + 1) : ti >= 0 ? rest[ti + 1] : undefined;
         let l = (c.logs ?? '').split('\n').filter(Boolean);
-        if (ti >= 0) l = l.slice(-parseInt(rest[ti + 1], 10));
+        if (tailN !== undefined && tailN !== 'all') l = l.slice(-parseInt(tailN, 10));
         // docker logs пишет stdout контейнера в stdout, а stderr — в stderr; для простоты всё в stdout
         return ok(joinLines(l));
       }
@@ -61,9 +63,12 @@ const docker: CommandDef = {
           HostConfig: { Memory: (c.memLimitMb ?? 0) * 1024 * 1024, RestartPolicy: { Name: 'unless-stopped' } },
         };
         if (fmt) {
-          const out = fmt.replace(/\{\{\s*\.([\w.]+)\s*\}\}/g, (_m, path: string) => {
+          // {{.State.OOMKilled}}, {{json .State}}, {{ .Config.Env }}
+          const out = fmt.replace(/\{\{\s*(json\s+)?\.([\w.]*)\s*\}\}/g, (_m, asJson: string | undefined, path: string) => {
             let v: unknown = data;
-            for (const k of path.split('.')) v = v && typeof v === 'object' ? (v as Record<string, unknown>)[k] : undefined;
+            for (const k of path.split('.').filter(Boolean)) v = v && typeof v === 'object' ? (v as Record<string, unknown>)[k] : undefined;
+            if (asJson) return JSON.stringify(v ?? null);
+            if (v && typeof v === 'object' && !Array.isArray(v)) return `map[${Object.entries(v).map(([k, x]) => `${k}:${x}`).join(' ')}]`;
             return Array.isArray(v) ? `[${v.join(' ')}]` : String(v ?? '<no value>');
           });
           return ok(out + '\n');
@@ -142,7 +147,7 @@ const docker: CommandDef = {
           return ok(`TYPE            TOTAL     ACTIVE    SIZE      RECLAIMABLE\nImages          ${String(imgs.length).padEnd(9)} ${String(imgs.filter((i) => !i.dangling).length).padEnd(9)} ${g(isz).padEnd(9)} ${g(rec)}\nContainers      ${String(cs.length).padEnd(9)} ${String(cs.filter((c) => c.status.startsWith('Up')).length).padEnd(9)} ${g(csz).padEnd(9)} ${g(crec)}\n`);
         }
         if (rest[0] === 'prune') {
-          if (!rest.includes('-f')) return fail('WARNING! This will remove all stopped containers and dangling images.\n(в тренажёре добавь -f для подтверждения)');
+          if (!rest.includes('-f') && !rest.includes('--force') && !rest.includes('-af')) return fail('WARNING! This will remove all stopped containers and dangling images.\n(в тренажёре добавь -f для подтверждения)');
           const before = (st.images ?? []).filter((i) => i.dangling).reduce((s, i) => s + i.sizeMb, 0) + cs.filter((c) => !/^(Up|Restarting)/.test(c.status)).reduce((s, c) => s + (c.sizeMb ?? 0), 0);
           st.images = (st.images ?? []).filter((i) => !i.dangling);
           st.containers = cs.filter((c) => /^(Up|Restarting)/.test(c.status));
@@ -152,7 +157,7 @@ const docker: CommandDef = {
       }
       case 'image':
         if (rest[0] === 'prune') {
-          if (!rest.includes('-f')) return fail('WARNING! This will remove all dangling images. (добавь -f)');
+          if (!rest.includes('-f') && !rest.includes('--force')) return fail('WARNING! This will remove all dangling images. (добавь -f)');
           const freed = (st.images ?? []).filter((i) => i.dangling).reduce((s, i) => s + i.sizeMb, 0);
           st.images = (st.images ?? []).filter((i) => !i.dangling);
           return ok(`Total reclaimed space: ${freed}MB\n`);
