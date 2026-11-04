@@ -27,6 +27,11 @@ const cmd: CommandDef = {
     let maxdepth = Infinity;
     let mindepth = 0;
     let neg = false;
+    // действия: -exec cmd {} \; | -exec cmd {} + | -delete | -ls | -printf
+    const actions: ((p: string, label: string, n: VNode) => void)[] = [];
+    const batch: { cmd: string[]; items: string[] }[] = [];
+    let actOut = '';
+    let actErr = '';
     for (; i < args.length; i++) {
       const opt = args[i];
       const val = args[i + 1];
@@ -97,7 +102,71 @@ const cmd: CommandDef = {
           mindepth = parseInt(needVal(), 10);
           continue;
         case '-print':
+          actions.push((_p, label) => (actOut += label + '\n'));
           continue;
+        case '-xdev':
+        case '-mount':
+        case '-depth':
+        case '-follow':
+        case '-L':
+        case '-H':
+          continue;
+        case '-newer': {
+          const ref = ctx.fs.lookup(abs(ctx, needVal()));
+          if (!ref) return fail(`find: '${val}': No such file or directory`);
+          t = (_p, n) => n.mtime > ref.mtime;
+          break;
+        }
+        case '-group': {
+          const v = needVal();
+          t = (_p, n) => n.group === v;
+          break;
+        }
+        case '-delete':
+          // через rm/rmdir: открытые процессом файлы остаются «удалёнными, но открытыми», как в жизни
+          actions.push((p, label, n) => {
+            const r = ctx.exec(n.type === 'dir' ? ['rmdir', p] : ['rm', '-f', p], '');
+            if (r.exitCode !== 0) actErr += `find: cannot delete '${label}': ${/Directory not empty/.test(r.stderr) ? 'Directory not empty' : 'Permission denied'}\n`;
+          });
+          continue;
+        case '-ls':
+          actions.push((_p, label, n) => (actOut += `${String(ctx.fs.size(n)).padStart(10)} ${n.owner} ${n.group} ${label}\n`));
+          continue;
+        case '-printf': {
+          const f = needVal();
+          actions.push((_p, label, n) => {
+            actOut += f
+              .replace(/%p/g, label)
+              .replace(/%f/g, n.name)
+              .replace(/%s/g, String(ctx.fs.size(n)))
+              .replace(/%u/g, n.owner)
+              .replace(/%g/g, n.group)
+              .replace(/%m/g, (n.mode & 0o777).toString(8))
+              .replace(/\\n/g, '\n')
+              .replace(/\\t/g, '\t');
+          });
+          continue;
+        }
+        case '-exec':
+        case '-ok': {
+          const cmdArgs: string[] = [];
+          let k = i + 1;
+          while (k < args.length && args[k] !== ';' && args[k] !== '+') cmdArgs.push(args[k++]);
+          if (k >= args.length) return fail(`find: missing argument to \`${opt}'`);
+          const plus = args[k] === '+';
+          i = k;
+          if (plus) {
+            const b = { cmd: cmdArgs, items: [] as string[] };
+            batch.push(b);
+            actions.push((_p, label) => b.items.push(label));
+          } else
+            actions.push((_p, label) => {
+              const r = ctx.exec(cmdArgs.map((a) => a.split('{}').join(label)), '');
+              actOut += r.stdout;
+              actErr += r.stderr;
+            });
+          continue;
+        }
         case '-empty':
           t = (_p, n) => (n.type === 'file' ? ctx.fs.size(n) === 0 : n.children.size === 0);
           break;
@@ -121,7 +190,11 @@ const cmd: CommandDef = {
       }
       const visit = (p: string, label: string, depth: number) => {
         const n = ctx.fs.get(p);
-        if (depth >= mindepth && tests.every((t) => t(p, n, depth))) out += label + '\n';
+        if (depth >= mindepth && tests.every((t) => t(p, n, depth))) {
+          if (actions.length) for (const a of actions) a(p, label, n);
+          else out += label + '\n';
+        }
+        if (!ctx.fs.lookup(p)) return; // удалён -delete
         if (n.type === 'dir' && depth < maxdepth) {
           if (!ctx.fs.can(n, ctx.user, 4) || !ctx.fs.can(n, ctx.user, 1)) {
             if (depth > 0 || true) err += `find: '${label}': Permission denied\n`;
@@ -138,6 +211,16 @@ const cmd: CommandDef = {
         if (!(e instanceof FsErr)) throw e;
       }
     }
+    for (const b of batch) {
+      if (!b.items.length) continue;
+      const idx = b.cmd.indexOf('{}');
+      const argv = idx >= 0 ? [...b.cmd.slice(0, idx), ...b.items, ...b.cmd.slice(idx + 1)] : [...b.cmd, ...b.items];
+      const r = ctx.exec(argv, '');
+      actOut += r.stdout;
+      actErr += r.stderr;
+    }
+    out += actOut;
+    err += actErr;
     return err ? { stdout: out, stderr: err, exitCode: 1 } : ok(out);
   },
 };

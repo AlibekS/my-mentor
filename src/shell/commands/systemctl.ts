@@ -68,6 +68,9 @@ const systemctl: CommandDef = {
   run(args, _s, ctx) {
     const pos = args.filter((x) => !x.startsWith('-'));
     const [action, name] = pos;
+    const quiet = args.includes('-q') || args.includes('--quiet');
+    if (action === 'list-unit-files') return ok('UNIT FILE                     STATE   PRESET\n' + joinLines(ctx.state.services.map((s) => `${(s.name + '.service').padEnd(29)} ${s.enabled ? 'enabled ' : 'disabled'} enabled`)) + `\n${ctx.state.services.length} unit files listed.\n`);
+    if (action === 'list-timers') return ok('NEXT                        LEFT     LAST                        PASSED  UNIT                         ACTIVATES\nWed 2026-11-05 00:00:00 +05 9h left  Wed 2026-11-04 00:00:00 +05 14h ago logrotate.timer              logrotate.service\nWed 2026-11-05 06:12:00 +05 15h left Wed 2026-11-04 06:12:00 +05 8h ago  apt-daily-upgrade.timer      apt-daily-upgrade.service\n\n2 timers listed.\n');
     if (!action && !args.includes('--failed')) {
       return ok(joinLines(ctx.state.services.map((s) => `  ${(s.name + '.service').padEnd(28)} loaded ${s.active.padEnd(8)} ${s.active === 'active' ? 'running' : s.active === 'failed' ? 'failed ' : 'dead   '} ${s.description}`)));
     }
@@ -80,10 +83,10 @@ const systemctl: CommandDef = {
     if (!name) return fail(`Too few arguments.`);
     const s = findSvc(ctx, name);
     if (!s) {
-      if (action === 'is-active') return { stdout: 'inactive\n', stderr: '', exitCode: 4 };
+      if (action === 'is-active') return { stdout: quiet ? '' : 'inactive\n', stderr: '', exitCode: 4 };
       return fail(`Unit ${name.replace(/\.service$/, '')}.service could not be found.`, action === 'status' ? 4 : 5);
     }
-    const needRoot = ['start', 'stop', 'restart', 'enable', 'disable', 'reload'];
+    const needRoot = ['start', 'stop', 'restart', 'enable', 'disable', 'reload', 'try-restart', 'reload-or-restart'];
     if (needRoot.includes(action) && ctx.user !== 'root') {
       return fail(`Failed to ${action} ${s.name}.service: Access denied\nSee system logs and 'systemctl status ${s.name}.service' for details.\n(Подсказка тренажёра: нужны права root — sudo systemctl ${action} ${s.name})`, 1);
     }
@@ -103,9 +106,11 @@ const systemctl: CommandDef = {
         return { stdout: out, stderr: '', exitCode: s.active === 'active' ? 0 : 3 };
       }
       case 'is-active':
-        return { stdout: s.active + '\n', stderr: '', exitCode: s.active === 'active' ? 0 : 3 };
+        return { stdout: quiet ? '' : s.active + '\n', stderr: '', exitCode: s.active === 'active' ? 0 : 3 };
+      case 'is-failed':
+        return { stdout: quiet ? '' : s.active + '\n', stderr: '', exitCode: s.active === 'failed' ? 0 : 1 };
       case 'is-enabled':
-        return { stdout: (s.enabled ? 'enabled' : 'disabled') + '\n', stderr: '', exitCode: s.enabled ? 0 : 1 };
+        return { stdout: quiet ? '' : (s.enabled ? 'enabled' : 'disabled') + '\n', stderr: '', exitCode: s.enabled ? 0 : 1 };
       case 'start': {
         if (s.active === 'active') return ok();
         const e = startService(ctx, s);
@@ -114,17 +119,33 @@ const systemctl: CommandDef = {
       case 'stop':
         stopService(ctx, s);
         return ok();
+      case 'try-restart':
       case 'restart':
-      case 'reload': {
+      case 'reload-or-restart': {
+        if (action === 'try-restart' && s.active !== 'active') return ok();
         stopService(ctx, s);
         const e = startService(ctx, s);
         return e ? fail(e) : ok();
       }
-      case 'enable':
+      case 'reload': {
+        // reload — перечитать конфиг без перезапуска процесса (PID тот же)
+        if (s.active !== 'active') return fail(`Job for ${s.name}.service invalid.\n${s.name}.service is not active, cannot reload.`);
+        s.logs.push({ time: '2026-11-04 14:30:00', priority: 'info', message: `Reloading ${s.description}...` });
+        s.logs.push({ time: '2026-11-04 14:30:00', priority: 'info', message: `Reloaded ${s.description}.` });
+        return ok();
+      }
+      case 'enable': {
         s.enabled = true;
-        return ok(`Created symlink /etc/systemd/system/multi-user.target.wants/${s.name}.service → /lib/systemd/system/${s.name}.service.\n`);
+        const msg = `Created symlink /etc/systemd/system/multi-user.target.wants/${s.name}.service → /lib/systemd/system/${s.name}.service.\n`;
+        if (args.includes('--now') && s.active !== 'active') {
+          const e = startService(ctx, s);
+          if (e) return fail(e, 1, msg);
+        }
+        return ok(msg);
+      }
       case 'disable':
         s.enabled = false;
+        if (args.includes('--now')) stopService(ctx, s);
         return ok(`Removed "/etc/systemd/system/multi-user.target.wants/${s.name}.service".\n`);
       default:
         return fail(`Unknown command verb '${action}'.`);
@@ -144,22 +165,39 @@ const journalctl: CommandDef = {
     let since: string | undefined;
     let until: string | undefined;
     let prio: string | undefined;
+    let grepRe: RegExp | undefined;
     let kernel = false;
+    let reverse = false;
+    let iso = false;
     for (let i = 0; i < args.length; i++) {
       const a = args[i];
-      if (a === '-u' || a === '--unit') unit = args[++i];
-      else if (a.startsWith('--unit=')) unit = a.slice(7);
-      else if (a === '-n' || a === '--lines') n = parseInt(args[++i], 10);
+      const eq = a.indexOf('=');
+      const long = a.startsWith('--') ? (eq > 0 ? a.slice(2, eq) : a.slice(2)) : '';
+      const val = () => (eq > 0 && a.startsWith('--') ? a.slice(eq + 1) : args[++i] ?? '');
+      if (a === '-u' || long === 'unit') unit = val();
+      else if (a === '-n' || long === 'lines') n = parseInt(val(), 10);
       else if (/^-n\d+$/.test(a)) n = parseInt(a.slice(2), 10);
-      else if (a === '--since' || a === '-S') since = args[++i];
-      else if (a.startsWith('--since=')) since = a.slice(8);
-      else if (a === '--until' || a === '-U') until = args[++i];
-      else if (a === '-p' || a === '--priority') prio = args[++i];
-      else if (a.startsWith('-p') && a.length > 2) prio = a.slice(2);
-      else if (a === '-k' || a === '--dmesg') kernel = true;
-      else if (/^-[xefrb]+$/.test(a) || a === '--no-pager') continue;
-      else if (/^-[a-z]*u$/.test(a)) unit = args[++i]; // -xeu nginx
-      else return fail(`journalctl: unrecognized option '${a}'`);
+      else if (a === '-S' || long === 'since') since = val();
+      else if (a === '-U' || long === 'until') until = val();
+      else if (a === '-p' || long === 'priority') prio = val();
+      else if (/^-p\w/.test(a)) prio = a.slice(2);
+      else if (a === '-g' || long === 'grep') {
+        try {
+          grepRe = new RegExp(val(), 'i');
+        } catch {
+          return fail('journalctl: invalid --grep pattern');
+        }
+      } else if (a === '-o' || long === 'output') iso = /iso/.test(val());
+      else if (a === '-k' || long === 'dmesg') kernel = true;
+      else if (long === 'reverse') reverse = true;
+      else if (['no-pager', 'follow', 'pager-end', 'catalog', 'boot', 'quiet', 'no-hostname', 'all', 'full', 'utc'].includes(long)) continue;
+      else if (/^-[xefrbqal]+$/.test(a)) {
+        if (a.includes('r')) reverse = true;
+      } else if (/^-[a-z]*u$/.test(a)) {
+        // -xeu nginx
+        if (a.includes('r')) reverse = true;
+        unit = args[++i];
+      } else return fail(`journalctl: unrecognized option '${a}'`);
     }
     const svcs = unit ? ctx.state.services.filter((s) => s.name === unit!.replace(/\.service$/, '')) : ctx.state.services;
     if (unit && !svcs.length && !kernel) return ok('-- No entries --\n');
@@ -169,11 +207,14 @@ const journalctl: CommandDef = {
     entries.sort((a, b) => a.time.localeCompare(b.time));
     const parseTime = (v: string): string => {
       const now = ctx.state.now.getTime();
-      const m = /^(\d+)\s*(hour|hours|min|minutes|minute|day|days|h|m|d)\s*ago$/.exec(v.trim());
+      // «1 hour ago», «30 min ago», «-1h», «-30min», «-2d»
+      const m = /^(?:(\d+)\s*(hours?|min|mins|minutes?|days?|h|m|d|s|sec|seconds?)\s*ago|-(\d+)\s*(hours?|min|mins|minutes?|days?|h|m|d|s|sec|seconds?))$/.exec(v.trim());
       let t: Date;
       if (m) {
-        const k = m[2].startsWith('h') ? 3600e3 : m[2].startsWith('d') ? 86400e3 : 60e3;
-        t = new Date(now - parseInt(m[1], 10) * k);
+        const num = parseInt(m[1] ?? m[3], 10);
+        const unitName = m[2] ?? m[4];
+        const k = unitName.startsWith('h') ? 3600e3 : unitName.startsWith('d') ? 86400e3 : unitName.startsWith('s') ? 1e3 : 60e3;
+        t = new Date(now - num * k);
       } else if (v === 'today') t = new Date(new Date(now).setHours(0, 0, 0, 0));
       else if (v === 'yesterday') t = new Date(new Date(now).setHours(0, 0, 0, 0) - 86400e3);
       else if (/^\d\d:\d\d(:\d\d)?$/.test(v)) return '2026-11-04 ' + (v.length === 5 ? v + ':00' : v);
@@ -190,11 +231,18 @@ const journalctl: CommandDef = {
       entries = entries.filter((e) => e.time <= u);
     }
     if (prio) {
-      const lvl = /^\d$/.test(prio) ? parseInt(prio, 10) : PRIOS.indexOf(prio.replace('error', 'err').replace('warn', 'warning'));
-      if (lvl < 0) return fail(`Failed to parse priority value: ${prio}`);
-      entries = entries.filter((e) => PRIOS.indexOf(e.priority) <= lvl);
+      // -p err, -p 3, -p warning..err, -p 0..3
+      const one = (x: string) => (/^\d$/.test(x) ? parseInt(x, 10) : PRIOS.indexOf(({ error: 'err', warn: 'warning', critical: 'crit', emergency: 'emerg', panic: 'emerg' } as Record<string, string>)[x.toLowerCase()] ?? x.toLowerCase()));
+      const [lo, hi] = prio.includes('..') ? prio.split('..') : [undefined, prio];
+      const max = one(hi || 'debug');
+      const min = lo ? one(lo) : 0;
+      if (max < 0 || min < 0) return fail(`Failed to parse priority value: ${prio}`);
+      const [a1, b1] = [Math.min(min, max), Math.max(min, max)];
+      entries = entries.filter((e) => PRIOS.indexOf(e.priority) >= a1 && PRIOS.indexOf(e.priority) <= b1);
     }
+    if (grepRe) entries = entries.filter((e) => grepRe!.test(e.message));
     if (n !== undefined) entries = entries.slice(-n);
+    if (reverse) entries.reverse();
     if (!entries.length) return ok('-- No entries --\n');
     const mons = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return ok(
@@ -203,7 +251,7 @@ const journalctl: CommandDef = {
           const [d, t] = e.time.split(' ');
           const [, mo, dd] = d.split('-');
           const color = PRIOS.indexOf(e.priority) <= 3 ? '\x1b[31m' : e.priority === 'warning' ? '\x1b[33m' : '';
-          return `${mons[+mo - 1]} ${dd} ${t} ${ctx.state.host} ${e.svc === 'kernel' ? 'kernel' : `${e.svc}[${e.pid}]`}: ${color}${e.message}${color ? '\x1b[0m' : ''}`;
+          return `${iso ? `${d}T${t}+0500` : `${mons[+mo - 1]} ${dd} ${t}`} ${ctx.state.host} ${e.svc === 'kernel' ? 'kernel' : `${e.svc}[${e.pid}]`}: ${color}${e.message}${color ? '\x1b[0m' : ''}`;
         }),
       ),
     );

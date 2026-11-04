@@ -22,6 +22,7 @@ function breToJs(p: string): string {
 
 function posixClasses(p: string) {
   return p
+    .replace(/\[(\^?)\]/g, '[$1\\]')
     .replace(/\[:digit:\]/g, '0-9')
     .replace(/\[:alpha:\]/g, 'A-Za-z')
     .replace(/\[:alnum:\]/g, 'A-Za-z0-9')
@@ -47,7 +48,19 @@ const cmd: CommandDef = {
     const args: string[] = [];
     let include: RegExp | undefined;
     let exclude: RegExp | undefined;
-    for (const x of rawArgs) {
+    // несколько -e: grep -e ERROR -e FATAL
+    const patterns: string[] = [];
+    const pre: string[] = [];
+    for (let i = 0; i < rawArgs.length; i++) {
+      const x = rawArgs[i];
+      if (x === '-e' || x === '--regexp') patterns.push(rawArgs[++i] ?? '');
+      else if (x.startsWith('--regexp=')) patterns.push(x.slice(9));
+      else if (/^-[a-zA-Z]*e$/.test(x) && x !== '-e' && !x.startsWith('--')) {
+        pre.push(x.slice(0, -1));
+        patterns.push(rawArgs[++i] ?? '');
+      } else pre.push(x);
+    }
+    for (const x of pre) {
       const m = /^--([a-z-]+)(?:=(.*))?$/s.exec(x);
       if (m && m[1] in LONG) {
         args.push('-' + LONG[m[1]]);
@@ -59,15 +72,22 @@ const cmd: CommandDef = {
       } else if (m && (m[1] === 'line-buffered' || m[1] === 'text' || m[1] === 'color' || m[1] === 'colour')) continue;
       else args.push(x);
     }
-    const a = parseArgs(args, ['A', 'B', 'C', 'e', 'm'], ['i', 'n', 'v', 'c', 'E', 'r', 'R', 'l', 'L', 'o', 'w', 'F', 'G', 'h', 'H', 'q', 's', 'a', 'I', 'A', 'B', 'C', 'e', 'm', 'P', 'x']);
+    const a = parseArgs(args, ['A', 'B', 'C', 'm'], ['i', 'n', 'v', 'c', 'E', 'r', 'R', 'l', 'L', 'o', 'w', 'F', 'G', 'h', 'H', 'q', 's', 'a', 'I', 'A', 'B', 'C', 'e', 'm', 'P', 'x']);
     if (a.unknown.length) return fail(invalidOption('grep', a.unknown[0]), 2);
     const pos = [...a.positional];
-    const pattern = a.values.e ?? pos.shift();
-    if (pattern === undefined) return fail("Usage: grep [OPTION]... PATTERNS [FILE]...\nTry 'grep --help' for more information.", 2);
-    let src: string;
-    if (a.flags.has('F')) src = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    else if (a.flags.has('E') || a.flags.has('P')) src = posixClasses(pattern);
-    else src = breToJs(posixClasses(pattern));
+    if (!patterns.length) {
+      const p0 = pos.shift();
+      if (p0 !== undefined) patterns.push(p0);
+    }
+    if (!patterns.length) return fail("Usage: grep [OPTION]... PATTERNS [FILE]...\nTry 'grep --help' for more information.", 2);
+    // шаблон с переводами строк — тоже несколько шаблонов
+    const pats = patterns.flatMap((p) => p.split('\n'));
+    const one = (pattern: string) => {
+      if (a.flags.has('F')) return pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      if (a.flags.has('E') || a.flags.has('P')) return posixClasses(pattern);
+      return breToJs(posixClasses(pattern));
+    };
+    let src = pats.length === 1 ? one(pats[0]) : pats.map((p) => `(?:${one(p)})`).join('|');
     if (a.flags.has('w')) src = `(?<![A-Za-z0-9_])(?:${src})(?![A-Za-z0-9_])`;
     if (a.flags.has('x')) src = `^(?:${src})$`;
     let re: RegExp;

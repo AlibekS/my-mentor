@@ -1,5 +1,5 @@
 import { VFS, FsErr, errText, normalizePath, dirname, basename } from './vfs';
-import { parse, splitList, tokenize, ParseError, globToRegExp, EXIT_PLACEHOLDER, type SimpleCommand, type Word } from './parser';
+import { parse, splitList, tokenize, ParseError, FatalExpansion, globToRegExp, arithAssign, EXIT_PLACEHOLDER, type SimpleCommand, type Word } from './parser';
 import { isCompound, parseScript, type Node } from './script';
 import { initKube } from './kube';
 import type { CommandContext, CommandDef, CommandResult, ExecRecord, Scenario, SystemState } from './types';
@@ -46,6 +46,8 @@ export class Shell {
   registry: Map<string, CommandDef>;
   scenario: Scenario;
   functions: Record<string, Node[]> = {};
+  /** позиционные параметры $1…$N скрипта/функции */
+  positional: string[] = [];
   opts = { errexit: false, nounset: false, pipefail: false };
   /** глубина вложенности скриптов/функций (exit внутри скрипта завершает скрипт) */
   private depth = 0;
@@ -75,6 +77,9 @@ export class Shell {
     h.group = user;
     for (const [p, spec] of Object.entries({ ...BASE_FILES, ...(scenario.files ?? {}) })) this.fs.seed(p, spec);
     for (const d of scenario.dirs ?? []) this.fs.mkdir(d, 'root', true);
+    // системные файлы «старые» — не мешают find -mtime -1 в заданиях
+    for (const p of Object.keys(BASE_FILES ?? {})) if (!(p in (scenario.files ?? {}))) this.fs.get(p).mtime = SIM_NOW.getTime() - 30 * 86400e3;
+    if (!this.fs.exists('/dev/null')) this.fs.seed('/dev/null', { content: '', mode: 0o666 });
     if (host !== DEFAULT_HOST) this.fs.seed('/etc/hostname', host + '\n');
 
     this.env = {
@@ -113,6 +118,15 @@ export class Shell {
       kernelLog: structuredClone(scenario.kernelLog ?? []),
       fsBaseBytes: 0,
     };
+    // /proc — по ресурсам сценария (nproc, load average, память)
+    const res = this.state.resources;
+    const procFiles: Record<string, string> = {
+      '/proc/cpuinfo': Array.from({ length: res.cpus ?? 2 }, (_, k) => `processor\t: ${k}\nmodel name\t: Intel(R) Xeon(R) Platinum 8375C CPU @ 2.90GHz\ncpu cores\t: ${res.cpus ?? 2}\n`).join('\n'),
+      '/proc/loadavg': `${res.load.map((x) => x.toFixed(2)).join(' ')} 1/${this.state.processes.length} ${this.state.nextPid}\n`,
+      '/proc/meminfo': `MemTotal:       ${res.memTotalMb * 1024} kB\nMemFree:        ${Math.max(0, res.memTotalMb - res.memUsedMb) * 1024} kB\nMemAvailable:   ${Math.max(0, res.memTotalMb - res.memUsedMb) * 1024} kB\nSwapTotal:      ${res.swapTotalMb * 1024} kB\nSwapFree:       ${(res.swapTotalMb - res.swapUsedMb) * 1024} kB\n`,
+      '/proc/uptime': '2002260.31 3900000.12\n',
+    };
+    for (const [p, c] of Object.entries(procFiles)) if (!this.fs.exists(p)) this.fs.seed(p, { content: c, mode: 0o444 });
     this.state.fsBaseBytes = this.fs.totalSize(this.fs.root);
     initKube(this.state.kube);
   }
@@ -220,7 +234,10 @@ export class Shell {
         if (this.depth > 0) throw new ReturnSignal(args[0] ? parseInt(args[0], 10) || 0 : 0);
         return { stdout: '', stderr: 'bash: return: can only `return\' from a function or sourced script\n', exitCode: 1 };
       case 'set': {
-        for (let i = 0; i < args.length; i++) {
+        // set -- a b c — задать позиционные параметры
+        const dd = args.indexOf('--');
+        if (dd >= 0) this.setPositional(this.env['0'] ?? 'bash', args.slice(dd + 1));
+        for (let i = 0; i < (dd >= 0 ? dd : args.length); i++) {
           const a = args[i];
           if (!/^[-+]/.test(a)) continue;
           const on = a.startsWith('-');
@@ -244,6 +261,15 @@ export class Shell {
           else if (!(a in this.env)) this.env[a] = '';
         }
         return this.ok();
+      case 'let': {
+        try {
+          let v = 0;
+          for (const a of args) v = arithAssign(a, this.env);
+          return { stdout: '', stderr: '', exitCode: v !== 0 ? 0 : 1 };
+        } catch (e) {
+          return { stdout: '', stderr: `bash: let: ${(e as Error).message}\n`, exitCode: 1 };
+        }
+      }
       case 'unset':
         for (const a of args) delete this.env[a];
         return this.ok();
@@ -256,7 +282,7 @@ export class Shell {
       }
       case 'shift': {
         const n = parseInt(args[0] ?? '1', 10);
-        const all = (this.env['@'] ?? '').split(' ').filter(Boolean).slice(n);
+        const all = this.positional.slice(n);
         this.setPositional(this.env['0'] ?? 'bash', all);
         return this.ok();
       }
@@ -355,6 +381,7 @@ export class Shell {
   }
 
   private setPositional(zero: string, args: string[]) {
+    this.positional = [...args];
     for (const k of Object.keys(this.env)) if (/^\d+$/.test(k)) delete this.env[k];
     this.env['0'] = zero;
     args.forEach((a, i) => (this.env[String(i + 1)] = a));
@@ -364,6 +391,7 @@ export class Shell {
 
   private callFunction(name: string, args: string[]): CommandResult & { output?: string } {
     const saved = Object.fromEntries(Object.entries(this.env).filter(([k]) => /^(\d+|#|@)$/.test(k)));
+    const savedPos = this.positional;
     this.setPositional(this.env['0'] ?? 'bash', args);
     this.depth++;
     const acc: Exec = { output: '', stdout: '', stderr: '', exitCode: 0 };
@@ -376,6 +404,7 @@ export class Shell {
       this.depth--;
       for (const k of Object.keys(this.env)) if (/^(\d+|#|@)$/.test(k)) delete this.env[k];
       Object.assign(this.env, saved);
+      this.positional = savedPos;
     }
     return acc;
   }
@@ -393,7 +422,7 @@ export class Shell {
       const msg = `${name}: ${(e as Error).message}\n`;
       return { output: msg, stdout: '', stderr: msg, exitCode: 2 };
     }
-    const saved = subshell ? { env: { ...this.env }, cwd: this.cwd, functions: { ...this.functions }, opts: { ...this.opts } } : null;
+    const saved = subshell ? { env: { ...this.env }, cwd: this.cwd, functions: { ...this.functions }, opts: { ...this.opts }, positional: this.positional } : null;
     if (subshell || args.length) this.setPositional(name, args);
     this.depth++;
     try {
@@ -408,6 +437,7 @@ export class Shell {
         this.cwd = saved.cwd;
         this.functions = saved.functions;
         this.opts = saved.opts;
+        this.positional = saved.positional;
       }
     }
     this.env['?'] = String(acc.exitCode);
@@ -427,7 +457,7 @@ export class Shell {
       switch (n.t) {
         case 'cmd': {
           // read внутри while с перенаправлением ввода
-          const rm = /^read(\s+-r)?(\s+.*)?$/.exec(n.line);
+          const rm = /^(?:IFS=(?:'[^']*'|"[^"]*"|\S*)\s+)?read(\s+-r)?(\s+.*)?$/.exec(n.line);
           if (rm && input) {
             if (!input.lines.length) {
               code = 1;
@@ -443,7 +473,7 @@ export class Shell {
           code = r.exitCode;
           if (r.fatal) throw new ExitSignal(code);
           this.env['?'] = String(code);
-          if (code !== 0 && this.opts.errexit && !cond && !/(\|\||&&)/.test(n.line)) throw new ExitSignal(code);
+          if (code !== 0 && this.opts.errexit && !cond && !/(\|\||&&)/.test(n.line) && !/^\s*!\s/.test(n.line) && !/^\s*(\(\(|let\s)/.test(n.line)) throw new ExitSignal(code);
           break;
         }
         case 'func':
@@ -479,7 +509,9 @@ export class Shell {
             let text = '';
             if (n.input) {
               try {
-                text = this.fs.read(this.resolve(n.input), this.state.user);
+                const tw = tokenize(n.input, this.env, { subst: (c) => this.execLine(c).stdout }).find((t) => t.kind === 'word');
+                const inputPath = tw && tw.kind === 'word' ? tw.word.value : n.input;
+                text = this.fs.read(this.resolve(inputPath), this.state.user);
               } catch (e) {
                 const msg = `bash: ${n.input}: ${e instanceof FsErr ? errText[e.code] : String(e)}\n`;
                 this.add(acc, { output: msg, stdout: '', stderr: msg, exitCode: 1 });
@@ -515,17 +547,13 @@ export class Shell {
 
   /** Раскрыть список слов для for: переменные, $(...), glob, разбиение по пробелам */
   private expandList(list: string): string[] {
-    const quotedAll = /^"\$@"$/.test(list.trim());
-    if (quotedAll) return (this.env['@'] ?? '').split(' ').filter(Boolean);
-    const toks = tokenize(list, this.env, { subst: (c) => this.execLine(c).stdout, nounset: this.opts.nounset });
+    const quotedAll = /^"\$(@|\{@\})"$/.test(list.trim());
+    if (quotedAll) return [...this.positional];
+    const toks = tokenize(list, this.env, { subst: (c) => this.execLine(c).stdout, nounset: this.opts.nounset, positional: this.positional });
     const out: string[] = [];
-    const hasQuotes = /["']/.test(list);
     for (const t of toks) {
       if (t.kind !== 'word') continue;
-      for (const w of this.expandWord(t.word)) {
-        if (hasQuotes) out.push(w);
-        else out.push(...w.split(/\s+/).filter(Boolean));
-      }
+      out.push(...this.expandWord(t.word));
     }
     return out;
   }
@@ -630,17 +658,37 @@ export class Shell {
     for (const part of splitList(line)) {
       if (part.op === '&&' && exitCode !== 0) continue;
       if (part.op === '||' && exitCode === 0) continue;
+      // ! конвейер — инвертировать код выхода
+      let text = part.text;
+      const negate = /^\s*!\s+/.test(text);
+      if (negate) text = text.replace(/^\s*!\s+/, '');
+      // (( выражение )) — арифметика, код 0 если результат не 0
+      const ar = /^\s*\(\((.*)\)\)\s*$/s.exec(text);
+      if (ar) {
+        try {
+          const v = arithAssign(ar[1].replace(/\$\{?([A-Za-z_]\w*)\}?/g, '$1'), this.env);
+          exitCode = (v !== 0) !== negate ? 0 : 1;
+        } catch (e) {
+          const msg = `bash: ((: ${(e as Error).message}\n`;
+          acc.output += msg;
+          acc.stderr += msg;
+          exitCode = 1;
+        }
+        this.env['?'] = String(exitCode);
+        continue;
+      }
       let parsed;
       try {
         this.substCode = 0;
-        parsed = parse(part.text, this.env, { subst: (c) => this.subst(c), nounset: this.opts.nounset });
+        parsed = parse(text, this.env, { subst: (c) => this.subst(c), nounset: this.opts.nounset, positional: this.positional });
       } catch (e) {
         const msg = e instanceof ParseError ? `bash: ${e.message}\n` : `bash: ${String((e as Error).message ?? e)}\n`;
         acc.output += msg;
         acc.stderr += msg;
-        exitCode = e instanceof ParseError && /unbound/.test(e.message) ? 1 : 2;
+        const fatal = e instanceof FatalExpansion || (e instanceof ParseError && /unbound/.test(e.message));
+        exitCode = fatal ? 1 : 2;
         this.env['?'] = String(exitCode);
-        if (/unbound/.test(msg) && this.depth > 0) {
+        if (fatal && this.depth > 0) {
           acc.exitCode = exitCode;
           acc.fatal = true;
           return acc;
@@ -671,6 +719,7 @@ export class Shell {
         if (k === cmds.length - 1 && r.output !== undefined && cmds.length === 1) lastOut = '\u0000' + r.stdout;
       }
       if (this.opts.pipefail && pipeCode !== 0) exitCode = pipeCode;
+      if (negate) exitCode = exitCode === 0 ? 1 : 0;
       if (lastOut.startsWith('\u0000')) {
         acc.stdout += lastOut.slice(1);
       } else {

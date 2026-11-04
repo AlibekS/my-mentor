@@ -66,7 +66,7 @@ export function splitStatements(text: string): string[] {
       push();
       continue;
     }
-    if (c === '&' && text[i + 1] !== '&' && text[i - 1] !== '&' && text[i - 1] !== '>') {
+    if (c === '&' && text[i + 1] !== '&' && text[i + 1] !== '>' && text[i - 1] !== '&' && text[i - 1] !== '>' && text[i - 1] !== '<' && text[i - 1] !== '|') {
       // фоновый запуск & — в тренажёре выполняем синхронно
       push();
       continue;
@@ -161,7 +161,7 @@ export function parseScript(text: string): Node[] {
       i++;
       const body = block(['done']);
       expect('done');
-      const red = /^done\s*<\s*(\S+)/.exec(st[i]);
+      const red = /^done\s*<\s*(\S+|"[^"]*")/.exec(st[i]);
       i++;
       return { t: 'while', until, cond, body, input: red?.[1], pipeFrom: pipeWhile?.[1].trim() };
     }

@@ -19,7 +19,7 @@ const cmd: CommandDef = {
     let out = '';
     let err = '';
     let code = 0;
-    const fmt = (nodes: { n: VNode; label: string }[]) => {
+    const fmt = (nodes: { n: VNode; label: string }[], dirListing = false) => {
       let list = nodes;
       if (a.flags.has('t')) list = [...list].sort((x, y) => y.n.mtime - x.n.mtime);
       if (a.flags.has('S')) list = [...list].sort((x, y) => ctx.fs.size(y.n) - ctx.fs.size(x.n));
@@ -31,7 +31,7 @@ const cmd: CommandDef = {
       const gw = Math.max(0, ...list.map((x) => x.n.group.length));
       let total = 0;
       for (const x of list) total += Math.ceil(ctx.fs.size(x.n) / 1024);
-      const head = list.length > 1 || list[0]?.n.type === 'dir' ? `total ${a.flags.has('h') ? humanSize(total * 1024) : total}\n` : '';
+      const head = dirListing ? `total ${a.flags.has('h') ? humanSize(total * 1024) : total}\n` : '';
       return (
         head +
         list
@@ -63,7 +63,7 @@ const cmd: CommandDef = {
           children = [{ n: self, label: '.' }, { n: self, label: '..' }, ...children];
         }
         if (paths.length > 1) out += (out ? '\n' : '') + d.label + ':\n';
-        out += fmt(children);
+        out += fmt(children, true);
       } catch (e) {
         if (e instanceof FsErr) {
           err += `ls: cannot open directory '${d.label}': ${errText[e.code]}\n`;

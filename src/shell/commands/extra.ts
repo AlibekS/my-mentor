@@ -2,6 +2,7 @@ import { fail, ok, type CommandContext, type CommandDef, type CommandResult } fr
 import { joinLines, lines } from '../args';
 import { abs, fmtDateTime, readInputs } from '../cmdutil';
 import { errText, FsErr } from '../vfs';
+import { resolveHost } from './network';
 
 /**
  * Команды, к которым сисадмин тянется по привычке: xargs, tac, seq, basename/dirname, stat,
@@ -219,11 +220,9 @@ const nc: CommandDef = {
       if (open) return { stdout: '', stderr: v ? `Connection to ${host} ${port} port [tcp/*] succeeded!\n` : '', exitCode: 0 };
       return { stdout: '', stderr: v ? `nc: connect to ${host} port ${port} (tcp) failed: Connection refused\n` : '', exitCode: 1 };
     }
-    const h = ctx.state.network.hosts[host];
-    if (!h && !/^\d+\.\d+\.\d+\.\d+$/.test(host)) return { stdout: '', stderr: `nc: getaddrinfo for host "${host}" port ${port}: Name or service not known\n`, exitCode: 1 };
-    if (h && (!h.ip || h.reachable === false)) {
-      return { stdout: '', stderr: h.ip ? `nc: connect to ${host} (${h.ip}) port ${port} (tcp) timed out: Operation now in progress\n` : `nc: getaddrinfo for host "${host}" port ${port}: Name or service not known\n`, exitCode: 1 };
-    }
+    const res = resolveHost(ctx, host);
+    if (!res) return { stdout: '', stderr: `nc: getaddrinfo for host "${host}" port ${port}: Name or service not known\n`, exitCode: 1 };
+    const h = res.host;
     // порт открыт, если есть HTTP-эндпоинт на этом хосте и порту без ошибки соединения
     const scheme = port === '443' ? 'https' : port === '80' ? 'http' : null;
     const eps = Object.entries(ctx.state.network.http).filter(([url]) => {
@@ -235,9 +234,10 @@ const nc: CommandDef = {
       }
     });
     const refused = eps.length > 0 && eps.every(([, e]) => e.error === 'refused');
-    const tmo = eps.length > 0 && eps.every(([, e]) => e.error === 'timeout');
-    const ip = h?.ip ?? host;
-    if (refused || (!eps.length && !scheme)) return { stdout: '', stderr: v ? `nc: connect to ${host} (${ip}) port ${port} (tcp) failed: Connection refused\n` : '', exitCode: 1 };
+    // reachable:false в сценарии — про ICMP (ping); TCP решают HTTP-эндпоинты. Без эндпоинтов — недоступен
+    const tmo = (eps.length > 0 && eps.every(([, e]) => e.error === 'timeout')) || (!eps.length && h.reachable === false);
+    const ip = res.ip;
+    if (refused || (!eps.length && !scheme && !tmo)) return { stdout: '', stderr: v ? `nc: connect to ${host} (${ip}) port ${port} (tcp) failed: Connection refused\n` : '', exitCode: 1 };
     if (tmo) return { stdout: '', stderr: v ? `nc: connect to ${host} (${ip}) port ${port} (tcp) timed out: Operation now in progress\n` : '', exitCode: 1 };
     return { stdout: '', stderr: v ? `Connection to ${host} (${ip}) ${port} port [tcp/${port === '443' ? 'https' : port === '80' ? 'http' : '*'}] succeeded!\n` : '', exitCode: 0 };
   },

@@ -239,22 +239,62 @@ const cmd: CommandDef = {
   summary: "разбор JSON: jq '.items[] | select(.status == \"failed\") | .id', -r — строки без кавычек, -c — компактно",
   usage: "jq [-r] [-c] 'фильтр' [файл]",
   run(args, stdin, ctx) {
-    const flags = args.filter((a) => /^-[rcS]+$/.test(a)).join('');
-    const pos = args.filter((a) => !/^-[rcS]+$/.test(a));
+    const LONG: Record<string, string> = { '--raw-output': '-r', '--compact-output': '-c', '--sort-keys': '-S', '--exit-status': '-e' };
+    const norm = args.map((a) => LONG[a] ?? a);
+    const flags = norm.filter((a) => /^-[rcSe]+$/.test(a)).join('');
+    const pos = norm.filter((a) => !/^-[rcSe]+$/.test(a));
     const filter = pos.shift() ?? '.';
     const r = readInputs('jq', pos, stdin, ctx);
     if (r.failed) return { stdout: '', stderr: r.stderr, exitCode: 2 };
     const text = r.inputs.map((i) => i.content).join('').trim();
     if (!text) return { stdout: '', stderr: '', exitCode: 0 };
-    let data: V;
+    // на входе может быть несколько JSON-документов подряд (вывод предыдущего jq)
+    const docs: V[] = [];
     try {
-      data = JSON.parse(text);
+      docs.push(JSON.parse(text));
     } catch {
-      return fail(`jq: error (at <stdin>:1): Cannot parse input as JSON: ${text.slice(0, 40)}…`, 2);
+      let k = 0;
+      while (k < text.length) {
+        while (k < text.length && /\s/.test(text[k])) k++;
+        if (k >= text.length) break;
+        let end = -1;
+        let depth = 0;
+        let inStr = false;
+        const startCh = text[k];
+        if (startCh === '{' || startCh === '[') {
+          for (let j = k; j < text.length; j++) {
+            const c = text[j];
+            if (inStr) {
+              if (c === '\\') j++;
+              else if (c === '"') inStr = false;
+              continue;
+            }
+            if (c === '"') inStr = true;
+            else if (c === '{' || c === '[') depth++;
+            else if (c === '}' || c === ']') {
+              depth--;
+              if (depth === 0) {
+                end = j + 1;
+                break;
+              }
+            }
+          }
+        } else {
+          const m = /^("(?:[^"\\]|\\.)*"|-?\d+(?:\.\d+)?(?:[eE][-+]?\d+)?|true|false|null)/.exec(text.slice(k));
+          if (m) end = k + m[0].length;
+        }
+        if (end < 0) return fail(`jq: error (at <stdin>:1): Cannot parse input as JSON: ${text.slice(k, k + 40)}…`, 2);
+        try {
+          docs.push(JSON.parse(text.slice(k, end)));
+        } catch {
+          return fail(`jq: error (at <stdin>:1): Cannot parse input as JSON: ${text.slice(k, k + 40)}…`, 2);
+        }
+        k = end;
+      }
     }
     let out: V[];
     try {
-      out = jqEval(filter, data);
+      out = docs.flatMap((d) => jqEval(filter, d));
     } catch (e) {
       return fail((e as Error).message, 3);
     }

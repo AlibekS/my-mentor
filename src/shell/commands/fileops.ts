@@ -216,10 +216,12 @@ const chown: CommandDef = {
   summary: 'сменить владельца: chown user:group файл (нужен root → sudo chown ...)',
   usage: 'chown [-R] пользователь[:группа] файл...',
   run(args, _s, ctx) {
-    const a = parseArgs(args, [], ['R', 'v']);
+    const a = parseArgs(args, [], ['R', 'v', 'h', 'c', 'f', 'recursive', 'verbose']);
+    if (a.flags.has('recursive')) a.flags.add('R');
     const [spec, ...files] = a.positional;
     if (!spec || !files.length) return fail(`chown: missing operand${spec ? ` after '${spec}'` : ''}`);
-    const [user, group] = spec.split(':');
+    // user:group, user.group (старый синтаксис), :group
+    const [user, group] = spec.includes(':') ? spec.split(':') : spec.includes('.') ? spec.split('.') : [spec, undefined];
     const known = ctx.fs.read('/etc/passwd', 'root').split('\n').map((l) => l.split(':')[0]);
     if (user && !known.includes(user)) return fail(`chown: invalid user: '${spec}'`);
     let err = '';
@@ -244,6 +246,19 @@ const chown: CommandDef = {
   },
 };
 
+const chgrp: CommandDef = {
+  name: 'chgrp',
+  summary: 'сменить группу файла: chgrp группа файл (нужен root → sudo chgrp ...)',
+  usage: 'chgrp [-R] группа файл...',
+  run(args, stdin, ctx) {
+    const a = parseArgs(args, [], ['R', 'v', 'h', 'c', 'f', 'recursive']);
+    const [group, ...files] = a.positional;
+    if (!group || !files.length) return fail(`chgrp: missing operand${group ? ` after '${group}'` : ''}`);
+    const r = chown.run([...(a.flags.has('R') || a.flags.has('recursive') ? ['-R'] : []), `:${group}`, ...files], stdin, ctx);
+    return { ...r, stderr: r.stderr.replace(/chown/g, 'chgrp').replace(/changing ownership/g, 'changing group') };
+  },
+};
+
 const tee: CommandDef = {
   name: 'tee',
   summary: 'вывести stdin на экран и одновременно записать в файл. -a — дописать',
@@ -260,7 +275,8 @@ const truncate: CommandDef = {
   summary: 'изменить размер файла: truncate -s 0 app.log — обнулить лог, не удаляя файл (процесс продолжит писать в него)',
   usage: 'truncate -s РАЗМЕР файл',
   run(args, _s, ctx) {
-    const a = parseArgs(args, ['s'], ['s']);
+    const a = parseArgs(args, ['s', 'size'], ['s', 'size', 'c', 'no-create']);
+    if (a.values.size !== undefined) a.values.s = a.values.size;
     if (a.values.s === undefined) return fail("truncate: you must specify either '--size' or '--reference'");
     if (a.values.s !== '0') return fail('truncate: в тренажёре поддерживается только -s 0');
     let err = '';
@@ -278,4 +294,4 @@ const truncate: CommandDef = {
   },
 };
 
-export default [touch, mkdir, rm, rmdir, cp, mv, chmod, chown, tee, truncate];
+export default [touch, mkdir, rm, rmdir, cp, mv, chmod, chown, tee, truncate, chgrp];

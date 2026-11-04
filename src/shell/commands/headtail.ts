@@ -3,8 +3,17 @@ import { parseArgs, invalidOption, lines, joinLines } from '../args';
 import { abs, readInputs } from '../cmdutil';
 
 function normalize(args: string[]) {
-  // head -5 → head -n 5
-  return args.map((x) => (/^-\d+$/.test(x) ? ['-n', x.slice(1)] : [x])).flat();
+  // head -5 → head -n 5; --lines=5 → -n 5; --bytes → -c
+  return args
+    .map((x) => {
+      if (/^-\d+$/.test(x)) return ['-n', x.slice(1)];
+      const m = /^--(lines|bytes)(?:=(.*))?$/.exec(x);
+      if (m) return m[2] !== undefined ? [m[1] === 'lines' ? '-n' : '-c', m[2]] : [m[1] === 'lines' ? '-n' : '-c'];
+      if (x === '--follow' || x === '--follow=name') return ['-f'];
+      if (x === '--quiet' || x === '--silent') return ['-q'];
+      return [x];
+    })
+    .flat();
 }
 
 const head: CommandDef = {
@@ -32,11 +41,12 @@ const tail: CommandDef = {
   summary: 'последние строки файла (по умолчанию 10). -n N, -f — следить за новыми строками (в эмуляторе — симуляция потока)',
   usage: 'tail [-n N] [-f] [файл...]',
   run(args, stdin, ctx) {
-    const a = parseArgs(normalize(args), ['n'], ['n', 'f', 'F', 'q']);
+    const a = parseArgs(normalize(args), ['n', 'c'], ['n', 'c', 'f', 'F', 'q']);
     if (a.unknown.length) return fail(invalidOption('tail', a.unknown[0]));
     const raw = a.values.n ?? '10';
     const fromStart = raw.startsWith('+');
-    const n = parseInt(raw.replace('+', ''), 10);
+    // tail -n -5 = tail -n 5
+    const n = Math.abs(parseInt(raw.replace('+', ''), 10));
     if (Number.isNaN(n)) return fail(`tail: invalid number of lines: '${raw}'`);
     const r = readInputs('tail', a.positional, stdin, ctx);
     let out = '';

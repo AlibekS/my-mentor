@@ -156,6 +156,8 @@ export class VFS {
   }
 
   write(path: string, data: string, user: string, append = false) {
+    // /dev/null: запись выбрасывается, чтение всегда пустое
+    if (path === '/dev/null' && this.lookup(path)) return;
     const existing = this.lookup(path);
     if (existing) {
       if (existing.type === 'dir') throw new FsErr('EISDIR', path);

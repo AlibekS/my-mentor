@@ -7,7 +7,7 @@ const cmd: CommandDef = {
   name: 'crontab',
   summary: 'расписание задач cron: crontab -l (показать), crontab файл (установить из файла), crontab -r (удалить). Формат: мин час день месяц день_недели команда',
   usage: 'crontab -l | crontab файл | crontab -r',
-  run(argsIn, _s, ctx) {
+  run(argsIn, stdin, ctx) {
     let args = argsIn;
     let user = ctx.user;
     const ui = args.indexOf('-u');
@@ -27,13 +27,14 @@ const cmd: CommandDef = {
     }
     if (args[0] === '-e') return fail('crontab -e: в тренажёре открой файл в редакторе (nano mycron), затем установи: crontab mycron');
     if (!args[0]) return fail('usage: crontab [-l | -r | file]');
-    const text = ctx.fs.read(abs(ctx, args[0]), ctx.user);
+    // crontab - — установить из stdin: echo '…' | crontab -   или   (crontab -l; echo '…') | crontab -
+    const text = args[0] === '-' ? stdin : ctx.fs.read(abs(ctx, args[0]), ctx.user);
     for (const [i, line] of text.split('\n').entries()) {
       const l = line.trim();
       if (!l || l.startsWith('#') || /^[A-Z_]+=/.test(l)) continue;
       const parts = l.split(/\s+/);
-      if (!/^@(reboot|hourly|daily|weekly|monthly)$/.test(parts[0]) && (parts.length < 6 || !parts.slice(0, 5).every((f) => /^[\d*/,\-]+$/.test(f))))
-        return fail(`"${args[0]}":${i + 1}: bad minute\nerrors in crontab file, can't install.`);
+      if (!/^@(reboot|hourly|daily|weekly|monthly)$/.test(parts[0]) && (parts.length < 6 || !parts.slice(0, 5).every((f) => /^([\d*/,\-]|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|mon|tue|wed|thu|fri|sat|sun)+$/i.test(f))))
+        return fail(`"${args[0] === '-' ? '-' : args[0]}":${i + 1}: bad minute\nerrors in crontab file, can't install.`);
     }
     if (!ctx.fs.exists('/var/spool/cron/crontabs')) ctx.fs.mkdir('/var/spool/cron/crontabs', 'root', true);
     ctx.fs.write(p, text, 'root');
