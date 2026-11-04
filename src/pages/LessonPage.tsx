@@ -411,7 +411,7 @@ function QuizStep({ module, lesson, base }: { module: Module; lesson: Lesson; ba
 
   useEffect(() => {
     if (!q) return;
-    mentorContext.set((c) => ({ ...c, step: 'quiz', task: undefined, question: { id: q.id, prompt: q.prompt, explanation: q.explanation, solution: q.type === 'command' || q.type === 'sql' || q.type === 'promql' ? q.solution : q.type === 'text' ? q.answer.accept[0] : q.options[q.correct] } }));
+    mentorContext.set((c) => ({ ...c, step: 'quiz', task: undefined, question: { id: q.id, prompt: q.prompt, explanation: q.explanation, solution: q.type === 'command' || q.type === 'sql' || q.type === 'promql' ? q.solution : q.type === 'text' ? q.answer.accept[0] ?? q.answer.keywords?.map((g) => g[0]).join(' + ') : q.options[q.correct] } }));
   }, [q]);
 
   const finish = () => {

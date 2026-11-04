@@ -468,4 +468,81 @@ describe('containers', () => {
     expect(s.run('grep --ignore-case --count L /var/log/app/a.log').stdout).toBe('2\n');
     expect(s.run('grep -r --include="b.*" l /var/log/app').stdout).toBe('/var/log/app/b.log:l3\n');
   });
+  it('awk is a real interpreter: concat, exit, gsub on fields, arrays, functions', () => {
+    const s = new Shell({ files: { '/l': ACCESS, '/df': 'FS Size Used Avail Use% On\n/dev/sda1 80G 69G 11G 86% /\n' } });
+    expect(s.run(`awk '$9 == 502 {print $4" "$7}' /l`).stdout).toBe('[04/Nov/2026:13:41:12 /api/pay\n[04/Nov/2026:13:45:30 /api/pay\n');
+    expect(s.run(`awk '$9==502{print NR; exit}' /l`).stdout).toBe('2\n');
+    expect(s.run(`awk '{gsub(/\\[/,"",$4); print $4}' /l | head -1`).stdout).toBe('04/Nov/2026:13:40:01\n');
+    expect(s.run(`awk 'tolower($0) ~ /post/' /l | wc -l`).stdout.trim()).toBe('1');
+    expect(s.run(`awk '{c[$9]++} END {for (k in c) print k, c[k]}' /l`).stdout).toBe('200 2\n500 1\n502 2\n');
+    expect(s.run(`awk '{c[$9]++} END {print length(c)}' /l`).stdout).toBe('3\n');
+    expect(s.run(`awk 'NR>1 {print int($5)}' /df`).stdout).toBe('86\n');
+    expect(s.run(`awk 'NR==2 {gsub("%",""); print $5}' /df`).stdout).toBe('86\n');
+    expect(s.run(`awk '!seen[$1]++ {n++} END {print n}' /l`).stdout).toBe('3\n');
+    expect(s.run(`awk 'function kb(x) { return x/1024 } {s+=$10} END {printf "%.2f\\n", kb(s)}' /l`).stdout).toBe('0.90\n');
+    expect(s.run(`awk 'BEGIN {print 1/3}'`).stdout).toBe('0.333333\n');
+    expect(s.run(`awk '{print $1 > "/tmp/ips"}' /l; wc -l < /tmp/ips`).stdout.trim()).toBe('5');
+    expect(s.run(`awk '{ print $1 ' /l`).exitCode).toBe(2);
+  });
+  it('bash: !, parameter expansion, arithmetic, braces, "$@", read loops', () => {
+    const s = new Shell({
+      files: { '/home/alibek/ep.txt': 'shop.kz /health\napi.shop.kz /v1\n', '/var/log/app/a.log': 'ERROR x\nERROR y\n', '/var/log/app/b.log': 'ERROR z\n' },
+      services: [{ name: 'nginx', description: 'n', active: 'active', enabled: true, logs: [] }, { name: 'mailer', description: 'm', active: 'failed', enabled: true, logs: [] }],
+    });
+    expect(s.run('systemctl is-active -q mailer || echo DOWN').stdout).toBe('DOWN\n');
+    expect(s.run('if ! systemctl is-active -q mailer; then echo FAIL; fi').stdout).toBe('FAIL\n');
+    expect(s.run('F=/var/log/app/a.log; echo ${F##*/} ${F%/*} ${F%.log} ${F:-x} ${NOPE:-def}').stdout).toBe('a.log /var/log/app /var/log/app/a /var/log/app/a.log def\n');
+    expect(s.run('echo $(( $(grep -c ERROR /var/log/app/a.log) + $(grep -c ERROR /var/log/app/b.log) ))').stdout).toBe('3\n');
+    expect(s.run('i=0; ((i++)); ((i+=5)); let i=i*2; echo $i').stdout).toBe('12\n');
+    expect(s.run('U=86; if (( U >= 80 )); then echo WARN; fi').stdout).toBe('WARN\n');
+    expect(s.run('for i in {1..3}; do echo n$i; done').stdout).toBe('n1\nn2\nn3\n');
+    expect(s.run('for f in $(find /var/log/app -name "*.log"); do echo $f; done').stdout).toBe('/var/log/app/a.log\n/var/log/app/b.log\n');
+    expect(s.run('while IFS=" " read -r host path; do echo "[$host]"; done < ~/ep.txt').stdout).toBe('[shop.kz]\n[api.shop.kz]\n');
+    expect(s.run('for x in nginx mailer; do if systemctl is-active $x &>/dev/null; then echo "$x up"; else echo "$x down"; fi; done').stdout).toBe('nginx up\nmailer down\n');
+    expect(s.run('f() { for a in "$@"; do echo "<$a>"; done; }; f "a b" c').stdout).toBe('<a b>\n<c>\n');
+    expect(s.run('X=; echo [${X:+alt}]').stdout).toBe('[]\n');
+    s.run('printf \'#!/bin/bash\\nset -u\\nS=${1:?usage: svc NAME}\\necho ok $S\\n\' > ~/u.sh; chmod +x ~/u.sh');
+    const r = s.run('./u.sh');
+    expect(r.exitCode).toBe(1);
+    expect(r.stderr).toContain('usage: svc NAME');
+    expect(s.run('./u.sh nginx').stdout).toBe('ok nginx\n');
+  });
+  it('find -exec/-delete, /dev/null, /proc, journalctl priorities', () => {
+    const s = new Shell({
+      files: { '/var/tmp/a.tmp': 'x', '/var/tmp/b.tmp': 'y', '/var/tmp/keep.txt': 'z' },
+      resources: { cpus: 4 },
+      services: [{ name: 'app', description: 'App', active: 'active', enabled: true, logs: [
+        { time: '2026-11-04 13:00:00', priority: 'warning', message: 'slow' },
+        { time: '2026-11-04 14:10:00', priority: 'err', message: 'boom' },
+        { time: '2026-11-04 14:20:00', priority: 'info', message: 'ok' },
+      ] }],
+    });
+    expect(s.run('find /var/tmp -name "*.tmp" -exec wc -c {} \\;').stdout).toBe('1 /var/tmp/a.tmp\n1 /var/tmp/b.tmp\n');
+    s.run('sudo find /var/tmp -name "*.tmp" -delete');
+    expect(s.run('ls /var/tmp').stdout).toBe('keep.txt\n');
+    s.run('sudo cp /dev/null /var/tmp/keep.txt');
+    expect(s.run('wc -c < /var/tmp/keep.txt').stdout.trim()).toBe('0');
+    expect(s.run('grep -c processor /proc/cpuinfo').stdout).toBe('4\n');
+    expect(s.run('journalctl -u app -p warning --no-pager').stdout).toContain('slow');
+    expect(s.run('journalctl -u app -p err').stdout).not.toContain('slow');
+    expect(s.run('journalctl -u app --since "-30min"').stdout).not.toContain('slow');
+    expect(s.run('journalctl -u app -r -n 1').stdout).toContain('ok');
+  });
+  it('network: /etc/hosts, ping flags, curl combined flags, openssl x509', () => {
+    const s = new Shell({
+      files: { '/etc/hosts': '127.0.0.1 localhost\n10.0.9.99 pay.internal\n' },
+      network: {
+        hosts: { 'pay.internal': { ip: '10.0.3.40', latencyMs: 1 }, 'shop.kz': { ip: '10.0.2.10' }, 'api.shop.kz': { ip: '10.0.2.5', cert: { subject: 'CN = api.shop.kz', issuer: 'CN = R11', notBefore: 'Aug  2 00:00:00 2026 GMT', notAfter: 'Oct 31 23:59:59 2026 GMT' } } },
+        http: { 'https://shop.kz/health': { status: 200, body: 'ok' }, 'https://shop.kz/old': { status: 301, headers: { Location: 'https://shop.kz/health' } } },
+      },
+    });
+    expect(s.run('ping -c1 pay.internal').stdout).toContain('(10.0.9.99)');
+    expect(s.run('dig +short pay.internal').stdout).toBe('10.0.3.40\n');
+    expect(s.run('ping -c 2 -W 1 localhost').stdout).toContain('2 packets transmitted');
+    expect(s.run('curl -so /dev/null -w "%{http_code}" https://shop.kz/health').stdout).toBe('200');
+    expect(s.run('curl -sL https://shop.kz/old').stdout).toBe('ok');
+    expect(s.run('curl -s -o /dev/null -w "%{response_code}" https://shop.kz/nope').stdout).toBe('404');
+    expect(s.run('openssl s_client -connect api.shop.kz:443 -servername api.shop.kz </dev/null | openssl x509 -noout -enddate').stdout).toBe('notAfter=Oct 31 23:59:59 2026 GMT\n');
+    expect(s.run('echo | openssl s_client -connect api.shop.kz:443 | openssl x509 -noout -checkend 0').exitCode).toBe(1);
+  });
 });

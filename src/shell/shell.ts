@@ -650,8 +650,11 @@ export class Shell {
     try {
       parse(line, {}, {});
     } catch (e) {
-      const msg = e instanceof ParseError ? `bash: ${e.message}\n` : `bash: ${String((e as Error).message ?? e)}\n`;
-      return { output: msg, stdout: '', stderr: msg, exitCode: 2 };
+      // ${VAR:?msg} при пустом окружении проверки синтаксиса — не синтаксическая ошибка
+      if (!(e instanceof FatalExpansion)) {
+        const msg = e instanceof ParseError ? `bash: ${e.message}\n` : `bash: ${String((e as Error).message ?? e)}\n`;
+        return { output: msg, stdout: '', stderr: msg, exitCode: 2 };
+      }
     }
     const acc: Exec = { output: '', stdout: '', stderr: '', exitCode: 0 };
     let exitCode = 0;
