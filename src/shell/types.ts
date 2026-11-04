@@ -133,14 +133,8 @@ export interface Scenario {
   openFiles?: OpenFile[];
   /** Сообщения ядра: journalctl -k, dmesg */
   kernelLog?: JournalEntry[];
-  /** docker/kubectl — свободная структура */
-  docker?: { containers: { id: string; name: string; image: string; status: string; ports?: string; logs?: string }[] };
-  kube?: {
-    namespace?: string;
-    pods: { name: string; ready: string; status: string; restarts: number; age: string; logs?: string; describe?: string }[];
-    services?: { name: string; type: string; clusterIp: string; ports: string; age: string }[];
-    events?: string[];
-  };
+  docker?: DockerState;
+  kube?: Omit<KubeState, 'pods'> & { pods?: KubePod[] };
 }
 
 export interface SystemState {
@@ -152,8 +146,8 @@ export interface SystemState {
   network: NetworkState;
   resources: Resources;
   streams: Record<string, string[]>;
-  docker: NonNullable<Scenario['docker']>;
-  kube: NonNullable<Scenario['kube']>;
+  docker: DockerState;
+  kube: KubeState;
   nextPid: number;
   now: Date;
   openFiles: OpenFile[];
@@ -201,3 +195,106 @@ export const fail = (stderr: string, exitCode = 1, stdout = ''): CommandResult =
   stderr: stderr.endsWith('\n') ? stderr : stderr + '\n',
   exitCode,
 });
+
+// ---------------- Docker ----------------
+export interface Container {
+  id: string;
+  name: string;
+  image: string;
+  /** "Up 2 hours", "Exited (137) 5 minutes ago", "Restarting (1) 10 seconds ago" */
+  status: string;
+  ports?: string;
+  logs?: string;
+  env?: Record<string, string>;
+  exitCode?: number;
+  oomKilled?: boolean;
+  restartCount?: number;
+  memLimitMb?: number;
+  memMb?: number;
+  cpu?: number;
+  sizeMb?: number;
+  /** файлы внутри контейнера для docker exec cat */
+  files?: Record<string, string>;
+  /** что будет после restart/start */
+  onStart?: { status: string; logs?: string; exitCode?: number };
+}
+
+export interface DockerState {
+  containers: Container[];
+  images?: { repo: string; tag: string; id: string; sizeMb: number; dangling?: boolean }[];
+}
+
+// ---------------- Kubernetes ----------------
+export interface KubePodSpec {
+  status: string; // Running | CrashLoopBackOff | ImagePullBackOff | Pending | Error | OOMKilled
+  ready?: string;
+  restarts?: number;
+  logs?: string;
+  previousLogs?: string;
+  /** Last State: Terminated, Reason / Exit Code */
+  lastReason?: string;
+  exitCode?: number;
+  /** Сообщение для Waiting/ошибок */
+  message?: string;
+  events?: string[];
+}
+
+export interface KubePod extends KubePodSpec {
+  name: string;
+  namespace?: string;
+  deployment?: string;
+  image?: string;
+  node?: string;
+  age: string;
+  ip?: string;
+  memoryLimit?: string;
+  memoryMi?: number;
+  cpuM?: number;
+  env?: Record<string, string>;
+  /** полностью свой вывод describe (иначе генерируется) */
+  describe?: string;
+}
+
+export interface KubeBehavior {
+  /** условия (все заданные должны совпасть) */
+  image?: string;
+  memoryLimitAtLeastMi?: number;
+  envHas?: string;
+  spec: KubePodSpec;
+}
+
+export interface KubeDeployment {
+  name: string;
+  namespace?: string;
+  image: string;
+  container?: string;
+  replicas: number;
+  memoryLimit?: string;
+  env?: Record<string, string>;
+  /** история образов по ревизиям (последний = текущий) */
+  history?: { image: string; cause?: string }[];
+  behaviors: KubeBehavior[];
+  labels?: Record<string, string>;
+}
+
+export interface KubeService {
+  name: string;
+  namespace?: string;
+  type: string;
+  clusterIp: string;
+  ports: string;
+  age: string;
+  /** app=<label> — к каким подам ведёт */
+  selector?: string;
+}
+
+export interface KubeState {
+  namespace?: string;
+  pods: KubePod[];
+  deployments?: KubeDeployment[];
+  services?: KubeService[];
+  /** дополнительные строки событий */
+  events?: string[];
+  nodes?: { name: string; status: string; cpu: string; memory: string; cpuPct?: number; memPct?: number }[];
+  counter?: number;
+}

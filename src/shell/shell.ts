@@ -1,6 +1,7 @@
 import { VFS, FsErr, errText, normalizePath, dirname, basename } from './vfs';
 import { parse, splitList, tokenize, ParseError, globToRegExp, EXIT_PLACEHOLDER, type SimpleCommand, type Word } from './parser';
 import { isCompound, parseScript, type Node } from './script';
+import { initKube } from './kube';
 import type { CommandContext, CommandDef, CommandResult, ExecRecord, Scenario, SystemState } from './types';
 import { BASE_DIRS, BASE_FILES, DEFAULT_HOST, DEFAULT_NETWORK, DEFAULT_RESOURCES, DEFAULT_USER, SIM_NOW } from './defaults';
 import { registry as defaultRegistry } from './registry';
@@ -101,7 +102,7 @@ export class Shell {
       resources: { ...DEFAULT_RESOURCES, ...(scenario.resources ?? {}) },
       streams: structuredClone(scenario.streams ?? {}),
       docker: structuredClone(scenario.docker ?? { containers: [] }),
-      kube: structuredClone(scenario.kube ?? { pods: [] }),
+      kube: { pods: [], ...structuredClone(scenario.kube ?? {}) } as SystemState['kube'],
       nextPid: 4000,
       now: SIM_NOW,
       openFiles: structuredClone(scenario.openFiles ?? []),
@@ -110,6 +111,7 @@ export class Shell {
       fsBaseBytes: 0,
     };
     this.state.fsBaseBytes = this.fs.totalSize(this.fs.root);
+    initKube(this.state.kube);
   }
 
   get home() {

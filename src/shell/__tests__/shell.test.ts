@@ -320,3 +320,70 @@ describe('scripting', () => {
     expect(sh().run('nano ~/new.sh').editFile).toBe('/home/alibek/new.sh');
   });
 });
+
+describe('containers', () => {
+  const kube = () =>
+    new Shell({
+      kube: {
+        deployments: [
+          {
+            name: 'checkout', image: 'shop/checkout:2.4.0', replicas: 2, env: { DB_URL: 'postgres://db/shop' },
+            history: [{ image: 'shop/checkout:2.3.1' }, { image: 'shop/checkout:2.4.0' }],
+            behaviors: [
+              { image: 'shop/checkout:2.4.0', spec: { status: 'CrashLoopBackOff', ready: '0/1', restarts: 7, lastReason: 'Error', exitCode: 1, previousLogs: 'Error: PAYMENTS_API_KEY is not set\n', logs: '' } },
+              { spec: { status: 'Running', logs: 'listening on :8080\n' } },
+            ],
+          },
+          { name: 'reports', image: 'shop/reports:1.0', replicas: 1, memoryLimit: '256Mi', behaviors: [{ memoryLimitAtLeastMi: 512, spec: { status: 'Running' } }, { spec: { status: 'CrashLoopBackOff', lastReason: 'OOMKilled', exitCode: 137, restarts: 5 } }] },
+        ],
+        services: [{ name: 'checkout', type: 'ClusterIP', clusterIp: '10.96.0.20', ports: '8080/TCP', age: '30d', selector: 'app=checkout' }],
+      },
+    });
+  it('get / describe / logs --previous', () => {
+    const s = kube();
+    const pods = s.run('kubectl get pods').stdout;
+    expect(pods.match(/CrashLoopBackOff/g)?.length).toBe(3);
+    const name = s.state.kube.pods[0].name;
+    expect(s.run(`kubectl logs ${name} --previous`).stdout).toContain('PAYMENTS_API_KEY');
+    expect(s.run(`kubectl describe pod ${name}`).stdout).toContain('Exit Code:    1');
+    expect(s.run('kubectl get endpoints checkout').stdout).toContain('<none>');
+    expect(s.run('kubectl rollout status deployment/checkout').exitCode).toBe(1);
+  });
+  it('rollout undo fixes; set resources fixes OOM', () => {
+    const s = kube();
+    s.run('kubectl rollout undo deployment/checkout');
+    expect(s.run('kubectl get pods').stdout.match(/checkout.*Running/g)?.length).toBe(2);
+    expect(s.run('kubectl get endpoints checkout').stdout).not.toContain('<none>');
+    expect(s.run('kubectl rollout history deployment/checkout').stdout).toContain('rollback');
+    s.run('kubectl set resources deployment reports --limits=memory=1Gi');
+    expect(s.run('kubectl get deploy').stdout).toMatch(/reports\s+1\/1/);
+  });
+  it('scale and delete pod recreate', () => {
+    const s = kube();
+    s.run('kubectl rollout undo deployment/checkout');
+    s.run('kubectl scale deployment checkout --replicas=4');
+    expect(s.state.kube.pods.filter((p) => p.deployment === 'checkout')).toHaveLength(4);
+    const victim = s.state.kube.pods.find((p) => p.deployment === 'checkout')!.name;
+    s.run(`kubectl delete pod ${victim}`);
+    expect(s.state.kube.pods.filter((p) => p.deployment === 'checkout')).toHaveLength(4);
+    expect(s.state.kube.pods.some((p) => p.name === victim)).toBe(false);
+  });
+  it('docker basics', () => {
+    const s = new Shell({
+      docker: {
+        containers: [
+          { id: 'a1b2c3d4e5f6a7', name: 'api', image: 'shop/api:1.2', status: 'Exited (137) 3 minutes ago', oomKilled: true, memLimitMb: 256, logs: 'starting\nheap growing\n', env: { DB_HOST: 'db' } },
+          { id: 'f6e5d4c3b2a1f0', name: 'nginx', image: 'nginx:1.27', status: 'Up 3 days', ports: '0.0.0.0:80->80/tcp', files: { '/etc/nginx/conf.d/default.conf': 'proxy_pass http://api:8080;\n' } },
+        ],
+        images: [{ repo: 'shop/api', tag: '1.2', id: 'abc', sizeMb: 300 }, { repo: '<none>', tag: '<none>', id: 'old', sizeMb: 900, dangling: true }],
+      },
+    });
+    expect(s.run('docker ps').stderr).toContain('permission denied');
+    expect(s.run('sudo docker ps').stdout).not.toContain('api ');
+    expect(s.run('sudo docker ps -a').stdout).toContain('Exited (137)');
+    expect(s.run("sudo docker inspect api --format '{{.State.OOMKilled}} {{.State.ExitCode}}'").stdout).toBe('true 137\n');
+    expect(s.run('sudo docker exec nginx cat /etc/nginx/conf.d/default.conf').stdout).toContain('api:8080');
+    expect(s.run('sudo docker logs --tail 1 api').stdout).toBe('heap growing\n');
+    expect(s.run('sudo docker image prune -f').stdout).toContain('900MB');
+  });
+});
