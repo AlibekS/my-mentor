@@ -1,0 +1,12 @@
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { mentorPlugin } from './server/mentor-plugin';
+
+export default defineConfig({
+  plugins: [react(), mentorPlugin()],
+  server: { host: '127.0.0.1', port: 5173 },
+  test: {
+    environment: 'node',
+    include: ['src/**/*.test.ts', 'content/**/*.test.ts'],
+  },
+});
