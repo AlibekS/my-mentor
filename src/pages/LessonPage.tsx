@@ -15,12 +15,19 @@ import { Markdown } from '../ui/Markdown';
 import { QuestionCard } from '../ui/QuestionCard';
 import { Terminal } from '../ui/Terminal';
 import { SqlConsole } from '../ui/SqlConsole';
+import { ObsConsole, type ObsKind } from '../ui/ObsConsole';
+import { evalQuery, sameResult } from '../obs/promql';
+import { searchLogs } from '../obs/kql';
 import { gradeSql, resultText, type QueryResult } from '../sql/engine';
 import { ProgressBar, plural } from '../ui/common';
 
 /** Запуск SQL-запроса как запись истории (для статистики и ментора) */
 export function sqlRecord(query: string, r: QueryResult): ExecRecord {
   return { line: query.trim(), commands: ['sql'], pipes: 0, stdout: r.ok ? resultText(r) : '', stderr: r.ok ? '' : r.error, exitCode: r.ok ? 0 : 1 };
+}
+
+export function obsRecord(kind: string, query: string, summary: string): ExecRecord {
+  return { line: `[${kind}] ${query.trim()}`, commands: [kind], pipes: 0, stdout: summary, stderr: summary.startsWith('ERROR') ? summary : '', exitCode: summary.startsWith('ERROR') ? 1 : 0 };
 }
 
 type Step = 'theory' | 'practice' | 'quiz' | 'summary';
@@ -146,7 +153,9 @@ function TheoryStep({ module, lesson, base }: { module: Module; lesson: Lesson; 
         </section>
         <section className={`pane term ${tab === 'term' ? 'show' : ''}`}>
           <div className="term-title">Песочница — пробуй {lesson.sql ? 'запросы' : 'команды'} из теории. Здесь ничего не проверяется.</div>
-          {lesson.sql ? (
+          {lesson.obs ? (
+            <ObsConsole ds={lesson.obs} onQuery={(kind, q, sum) => update((p) => recordCommand(p, obsRecord(kind, q, sum), module.id))} />
+          ) : lesson.sql ? (
             <SqlConsole dataset={lesson.sql.dataset} onRun={(q, r) => update((p) => recordCommand(p, sqlRecord(q, r), module.id))} />
           ) : (
             <Terminal shell={shell} banner={'\x1b[2mПесочница урока. help — список команд, man <команда> — справка.\x1b[0m'} onExec={(rec) => update((p) => recordCommand(p, rec, module.id))} />
@@ -237,6 +246,30 @@ function PracticeStep({ module, lesson, base }: { module: Module; lesson: Lesson
     } else if (r.ok && r.columns.length) setSqlFeedback(g.reason ?? null);
   };
 
+  const onObs = (kind: ObsKind, query: string, summary: string) => {
+    const rec = obsRecord(kind, query, summary);
+    termLog.current.push(rec);
+    mentorContext.set((c) => ({ ...c, terminal: termLog.current.slice(-8).map((x) => ({ line: x.line, output: x.stdout.slice(0, 800), exitCode: x.exitCode })) }));
+    update((p) => recordCommand(p, rec, module.id));
+    if (tp?.solved || task.answer || !lesson.obs || task.obs !== kind) return;
+    let ok = false;
+    let reason: string | undefined;
+    if (kind === 'promql') {
+      const cmp = sameResult(evalQuery(query, lesson.obs), evalQuery(task.solution, lesson.obs));
+      ok = cmp.ok;
+      reason = cmp.reason;
+    } else if (kind === 'logs') {
+      const a = searchLogs(lesson.obs.logs ?? [], query);
+      const b = searchLogs(lesson.obs.logs ?? [], task.solution);
+      ok = a.ok && b.ok && a.hits.length === b.hits.length && a.hits.every((h, i) => h === b.hits[i]);
+      reason = a.ok ? `Найдено записей: ${a.hits.length}, а нужно: ${b.hits.length}.` : a.error;
+    }
+    if (ok) {
+      setSqlFeedback(null);
+      solve([kind]);
+    } else setSqlFeedback(reason ?? null);
+  };
+
   const submitAnswer = () => {
     if (!task.answer) return;
     if (checkAnswer(answer, task.answer)) {
@@ -316,7 +349,9 @@ function PracticeStep({ module, lesson, base }: { module: Module; lesson: Lesson
             )}
           </div>
           {sqlFeedback && !tp?.solved && <p className="feedback bad small" role="status">Пока не совпадает с ожидаемым: {sqlFeedback}</p>}
-          {lesson.sql ? (
+          {lesson.obs ? (
+            <ObsConsole key={resetN} ds={lesson.obs} onQuery={onObs} />
+          ) : lesson.sql ? (
             <SqlConsole dataset={lesson.sql.dataset} onRun={onSql} resetKey={resetN} />
           ) : (
           <Terminal key={`${envKey}-${resetN}`} shell={shell} onExec={onExec} autoFocus banner={`\x1b[2m${lesson.kind === 'boss' ? 'Инцидент в процессе — действуй как L3.' : 'Окружение урока.'} help — список команд, man <команда> — справка.\x1b[0m`} />
@@ -338,7 +373,7 @@ function QuizStep({ module, lesson, base }: { module: Module; lesson: Lesson; ba
 
   useEffect(() => {
     if (!q) return;
-    mentorContext.set((c) => ({ ...c, step: 'quiz', task: undefined, question: { id: q.id, prompt: q.prompt, explanation: q.explanation, solution: q.type === 'command' || q.type === 'sql' ? q.solution : q.type === 'text' ? q.answer.accept[0] : q.options[q.correct] } }));
+    mentorContext.set((c) => ({ ...c, step: 'quiz', task: undefined, question: { id: q.id, prompt: q.prompt, explanation: q.explanation, solution: q.type === 'command' || q.type === 'sql' || q.type === 'promql' ? q.solution : q.type === 'text' ? q.answer.accept[0] : q.options[q.correct] } }));
   }, [q]);
 
   const finish = () => {
@@ -364,6 +399,7 @@ function QuizStep({ module, lesson, base }: { module: Module; lesson: Lesson; ba
           key={q.id}
           q={q}
           dataset={lesson.sql?.dataset}
+          obs={lesson.obs}
           solved={lp?.quiz[q.id]?.correct}
           onAttempt={(ok, n) =>
             update((p) => {

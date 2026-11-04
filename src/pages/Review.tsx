@@ -13,6 +13,10 @@ import { QuestionCard } from '../ui/QuestionCard';
 import { Terminal } from '../ui/Terminal';
 import { SqlConsole } from '../ui/SqlConsole';
 import { gradeSql } from '../sql/engine';
+import { ObsConsole } from '../ui/ObsConsole';
+import type { ObsDataset } from '../obs/types';
+import { evalQuery, sameResult } from '../obs/promql';
+import { searchLogs } from '../obs/kql';
 import { fmtDate } from '../ui/common';
 
 export function Review() {
@@ -48,9 +52,9 @@ export function Review() {
         <div>
           <p className="small muted">Осталось на сегодня: {due.length} · из урока «{lesson.title}»</p>
           {item.kind === 'question' ? (
-            <ReviewQuestion key={item.key} q={lesson.quiz.find((x) => x.id === item.itemId)} dataset={lesson.sql?.dataset} onDone={finish} />
+            <ReviewQuestion key={item.key} q={lesson.quiz.find((x) => x.id === item.itemId)} dataset={lesson.sql?.dataset} obs={lesson.obs} onDone={finish} />
           ) : (
-            <ReviewTask key={item.key} task={lesson.tasks.find((t) => t.id === item.itemId)} scenario={lesson.scenario} dataset={lesson.sql?.dataset} moduleId={lesson.moduleId} onDone={finish} />
+            <ReviewTask key={item.key} task={lesson.tasks.find((t) => t.id === item.itemId)} scenario={lesson.scenario} dataset={lesson.sql?.dataset} obs={lesson.obs} moduleId={lesson.moduleId} onDone={finish} />
           )}
         </div>
       )}
@@ -58,13 +62,13 @@ export function Review() {
   );
 }
 
-function ReviewQuestion({ q, onDone, dataset }: { q?: Question; onDone: (ok: boolean) => void; dataset?: string }) {
+function ReviewQuestion({ q, onDone, dataset, obs }: { q?: Question; onDone: (ok: boolean) => void; dataset?: string; obs?: ObsDataset }) {
   const [ok, setOk] = useState(false);
   if (!q) return <button className="btn" onClick={() => onDone(true)}>Пропустить (вопрос удалён)</button>;
-  return <QuestionCard q={q} dataset={dataset} maxAttempts={1} onAttempt={(r) => setOk(r)} onNext={() => onDone(ok)} />;
+  return <QuestionCard q={q} dataset={dataset} obs={obs} maxAttempts={1} onAttempt={(r) => setOk(r)} onNext={() => onDone(ok)} />;
 }
 
-function ReviewTask({ task, scenario, moduleId, onDone, dataset }: { task?: Task; scenario: object; moduleId: string; onDone: (ok: boolean) => void; dataset?: string }) {
+function ReviewTask({ task, scenario, moduleId, onDone, dataset, obs }: { task?: Task; scenario: object; moduleId: string; onDone: (ok: boolean) => void; dataset?: string; obs?: ObsDataset }) {
   const { update } = useStore();
   const shell = useMemo(() => new Shell(task?.scenario ?? scenario), [task, scenario]);
   const [solved, setSolved] = useState(false);
@@ -91,7 +95,16 @@ function ReviewTask({ task, scenario, moduleId, onDone, dataset }: { task?: Task
           <button className="btn ghost small" onClick={() => onDone(false)}>Не помню — повторить позже</button>
         </div>
       )}
-      {dataset ? (
+      {obs ? (
+        <ObsConsole
+          ds={obs}
+          onQuery={(kind, q) => {
+            if (task.answer || task.obs !== kind) return;
+            if (kind === 'promql' && sameResult(evalQuery(q, obs), evalQuery(task.solution, obs)).ok) setSolved(true);
+            if (kind === 'logs' && searchLogs(obs.logs ?? [], q).hits.length === searchLogs(obs.logs ?? [], task.solution).hits.length) setSolved(true);
+          }}
+        />
+      ) : dataset ? (
         <SqlConsole
           dataset={dataset}
           onRun={async (q) => {

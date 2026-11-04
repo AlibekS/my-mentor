@@ -6,6 +6,8 @@ import { checkAnswer } from '../../src/engine/normalize';
 import { checkCommandAnswer } from '../../src/engine/commandQuestion';
 import { stripAnsi } from '../../src/shell/shell';
 import { gradeSql, openDb, runQuery, resultText } from '../../src/sql/engine';
+import { evalQuery, sameResult } from '../../src/obs/promql';
+import { searchLogs } from '../../src/obs/kql';
 
 /**
  * Проверка целостности контента: эталонные решения проходят собственные проверки.
@@ -39,6 +41,24 @@ describe('content integrity', () => {
         // задания без своего сценария работают в общем окружении урока — по порядку
         let shared: Shell | null = null;
         for (const t of l.tasks) {
+          if (l.obs) {
+            it(`${l.id}/${t.id}: observability task is solvable`, () => {
+              expect(t.hints.length).toBeLessThanOrEqual(3);
+              expect(t.answer || t.obs, 'obs task needs answer or obs check').toBeTruthy();
+              if (t.obs === 'promql') {
+                const r = evalQuery(t.solution, l.obs!);
+                expect(r.ok, r.error).toBe(true);
+                expect(r.series.length).toBeGreaterThan(0);
+              }
+              if (t.obs === 'logs') {
+                const r = searchLogs(l.obs!.logs ?? [], t.solution);
+                expect(r.ok, r.error).toBe(true);
+                expect(r.hits.length).toBeGreaterThan(0);
+              }
+              for (const p of l.obs!.dashboard?.panels ?? []) expect(evalQuery(p.query, l.obs!).ok, p.query).toBe(true);
+            });
+            continue;
+          }
           if (l.sql) {
             it(`${l.id}/${t.id}: SQL solution runs and grades`, async () => {
               expect(t.hints.length).toBeLessThanOrEqual(3);
@@ -73,6 +93,12 @@ describe('content integrity', () => {
             if (q.type === 'text' && q.answer.normalize !== 'keywords') expect(checkAnswer(q.answer.accept[0], q.answer)).toBe(true);
             if (q.type === 'choice') expect(q.correct).toBeLessThan(q.options.length);
           });
+          if (q.type === 'promql')
+            it(`${l.id}/${q.id}: PromQL question grades its own solution`, () => {
+              expect(l.obs).toBeDefined();
+              expect(sameResult(evalQuery(q.solution, l.obs!), evalQuery(q.solution, l.obs!)).ok).toBe(true);
+              expect(evalQuery(q.solution, l.obs!).series.length).toBeGreaterThan(0);
+            });
           if (q.type === 'sql')
             it(`${l.id}/${q.id}: SQL question grades its own solution`, async () => {
               expect(l.sql, 'sql question needs lesson.sql').toBeDefined();

@@ -3,6 +3,9 @@ import { grade, kindOf, type Gradable } from '../engine/evaluateQuestion';
 import { Markdown } from './Markdown';
 import { gradeSql, type QueryResult } from '../sql/engine';
 import { ResultTable } from './SqlConsole';
+import type { ObsDataset } from '../obs/types';
+import { evalQuery, labelsText, sameResult } from '../obs/promql';
+import { LineChart } from './LineChart';
 
 interface Props {
   q: Gradable & { prompt: string; explanation?: string; hint?: string };
@@ -21,9 +24,11 @@ interface Props {
   autoNext?: boolean;
   /** датасет SQL-урока (для вопросов type: 'sql') */
   dataset?: string;
+  /** данные наблюдаемости (для вопросов type: 'promql') */
+  obs?: ObsDataset;
 }
 
-export function QuestionCard({ q, onAttempt, maxAttempts = 2, allowSkip, onSkip, onNext, nextLabel = 'Дальше →', hideAnswer, solved, autoNext, dataset }: Props) {
+export function QuestionCard({ q, onAttempt, maxAttempts = 2, allowSkip, onSkip, onNext, nextLabel = 'Дальше →', hideAnswer, solved, autoNext, dataset, obs }: Props) {
   const [input, setInput] = useState('');
   const [choice, setChoice] = useState<number | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -31,6 +36,7 @@ export function QuestionCard({ q, onAttempt, maxAttempts = 2, allowSkip, onSkip,
   const [output, setOutput] = useState<string>();
   const [sqlRes, setSqlRes] = useState<{ r: QueryResult; reason?: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [promRes, setPromRes] = useState<{ r: ReturnType<typeof evalQuery>; reason?: string } | null>(null);
   const kind = kindOf(q);
 
   const submit = async () => {
@@ -44,6 +50,12 @@ export function QuestionCard({ q, onAttempt, maxAttempts = 2, allowSkip, onSkip,
       setBusy(false);
       setSqlRes({ r: g.result, reason: g.ok ? undefined : g.reason });
       r = { ok: g.ok };
+    } else if (kind === 'promql') {
+      if (!obs) return;
+      const mine = evalQuery(val, obs);
+      const cmp = sameResult(mine, evalQuery(q.solution ?? '', obs));
+      setPromRes({ r: mine, reason: cmp.ok ? undefined : cmp.reason });
+      r = { ok: cmp.ok };
     } else r = grade(q, val);
     setAttempt(n);
     setOutput(r.output);
@@ -68,7 +80,7 @@ export function QuestionCard({ q, onAttempt, maxAttempts = 2, allowSkip, onSkip,
             </label>
           ))}
         </fieldset>
-      ) : kind === 'sql' ? (
+      ) : kind === 'sql' || kind === 'promql' ? (
         <form
           className="sql-editor"
           onSubmit={(e) => {
@@ -76,7 +88,7 @@ export function QuestionCard({ q, onAttempt, maxAttempts = 2, allowSkip, onSkip,
             submit();
           }}
         >
-          <label className="sr-only" htmlFor="qinput">SQL-запрос</label>
+          <label className="sr-only" htmlFor="qinput">{kind === 'sql' ? 'SQL-запрос' : 'PromQL-запрос'}</label>
           <textarea
             id="qinput"
             className="mono"
@@ -91,7 +103,7 @@ export function QuestionCard({ q, onAttempt, maxAttempts = 2, allowSkip, onSkip,
             }}
             disabled={finished}
             spellCheck={false}
-            placeholder="SELECT …   (Ctrl+Enter — проверить)"
+            placeholder={kind === 'sql' ? 'SELECT …   (Ctrl+Enter — проверить)' : 'sum by (…) (rate(…[5m]))   (Ctrl+Enter — проверить)'}
             autoFocus
           />
         </form>
@@ -124,6 +136,12 @@ export function QuestionCard({ q, onAttempt, maxAttempts = 2, allowSkip, onSkip,
         <>
           {sqlRes.reason && state !== 'ok' && <p className="muted small">{sqlRes.reason}</p>}
           <ResultTable r={sqlRes.r} max={20} />
+        </>
+      )}
+      {promRes && (
+        <>
+          {promRes.reason && state !== 'ok' && <p className="muted small">{promRes.reason}</p>}
+          {promRes.r.ok && obs && <LineChart series={promRes.r.series.map((x) => ({ name: labelsText(x.labels) || 'value', values: x.values }))} start={obs.start} step={obs.step} height={150} />}
         </>
       )}
       {state === 'bad' && (

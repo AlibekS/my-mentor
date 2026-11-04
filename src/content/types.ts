@@ -1,6 +1,7 @@
 import type { Scenario } from '../shell/types';
 import type { Shell } from '../shell/shell';
 import type { ExecRecord } from '../shell/types';
+import type { ObsDataset } from '../obs/types';
 
 /** Проверка результата задания — по состоянию и выводу, а не по точному тексту команды */
 export type Check =
@@ -64,6 +65,8 @@ export interface Task {
   tags?: string[];
   /** SQL-урок: важен ли порядок строк при сравнении с эталоном (solution) */
   sqlOrdered?: boolean;
+  /** Урок наблюдаемости: задание засчитывается, когда результат запроса совпал с solution */
+  obs?: 'promql' | 'logs';
 }
 
 export type Question =
@@ -99,6 +102,15 @@ export type Question =
     }
   | {
       id: string;
+      type: 'promql';
+      prompt: string;
+      /** Запрос ученика сравнивается с эталоном по рядам и значениям на данных урока */
+      solution: string;
+      explanation: string;
+      hint?: string;
+    }
+  | {
+      id: string;
       type: 'choice';
       prompt: string;
       options: string[];
@@ -122,6 +134,8 @@ export interface LessonDef {
   scenario: Scenario;
   /** SQL-урок: вместо терминала — SQL-консоль с этой БД (CREATE TABLE + INSERT, диалект SQLite) */
   sql?: { dataset: string };
+  /** Урок наблюдаемости: вместо терминала — консоль метрик/логов/трейсов */
+  obs?: ObsDataset;
   tasks: Task[];
   quiz: Question[];
   glossary?: GlossaryItem[];

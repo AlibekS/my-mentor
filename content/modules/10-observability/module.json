@@ -27,6 +27,6 @@
   "reviewedAt": "2026-11-04",
   "demand": "rising",
   "marketNote": "Datadog, Grafana/Prometheus и OpenTelemetry часто упоминаются в вакансиях; метрико-ориентированные расследования становятся нормой.",
-  "status": "planned",
+  "status": "ready",
   "estimatedMinutes": 150
 }
