@@ -198,7 +198,7 @@ function PlacementStep({ survey, onDone }: { survey: Survey; onDone: (runs: Topi
       {q.scenario && q.answer ? (
         <PlacementTerminalTask key={qn} q={q} onResult={(ok, skipped) => answer(q, ok, skipped)} />
       ) : (
-        <QuestionCard key={qn} q={{ ...q, hint: undefined }} maxAttempts={1} hideAnswer allowSkip onSkip={() => answer(q, false, true)} onAttempt={(ok) => setTimeout(() => answer(q, ok), ok ? 500 : 900)} />
+        <QuestionCard key={qn} q={{ ...q, hint: undefined }} dataset={q.dataset} maxAttempts={1} hideAnswer allowSkip onSkip={() => answer(q, false, true)} onAttempt={(ok) => setTimeout(() => answer(q, ok), ok ? 500 : 900)} />
       )}
     </div>
   );

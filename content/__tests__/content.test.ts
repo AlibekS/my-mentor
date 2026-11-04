@@ -5,6 +5,7 @@ import { evaluate } from '../../src/engine/checks';
 import { checkAnswer } from '../../src/engine/normalize';
 import { checkCommandAnswer } from '../../src/engine/commandQuestion';
 import { stripAnsi } from '../../src/shell/shell';
+import { gradeSql, openDb, runQuery, resultText } from '../../src/sql/engine';
 
 /**
  * Проверка целостности контента: эталонные решения проходят собственные проверки.
@@ -38,6 +39,21 @@ describe('content integrity', () => {
         // задания без своего сценария работают в общем окружении урока — по порядку
         let shared: Shell | null = null;
         for (const t of l.tasks) {
+          if (l.sql) {
+            it(`${l.id}/${t.id}: SQL solution runs and grades`, async () => {
+              expect(t.hints.length).toBeLessThanOrEqual(3);
+              const db = await openDb(l.sql!.dataset);
+              const r = runQuery(db, t.solution);
+              expect(r.ok, r.ok ? '' : r.error).toBe(true);
+              if (t.answer) {
+                if (t.answer.normalize !== 'keywords') expect(t.answer.accept.some((a) => resultText(r, 1000).toLowerCase().includes(a.toLowerCase())), `answer ${t.answer.accept[0]} not in:\n${resultText(r)}`).toBe(true);
+              } else {
+                expect(r.ok && r.rows.length > 0, 'solution should return rows').toBe(true);
+                expect((await gradeSql(l.sql!.dataset, t.solution, t.solution, t.sqlOrdered)).ok).toBe(true);
+              }
+            });
+            continue;
+          }
           it(`${l.id}/${t.id}: solution passes its check`, () => {
             expect(t.hints.length).toBeLessThanOrEqual(3);
             expect(t.check || t.answer, 'task needs check or answer').toBeTruthy();
@@ -57,6 +73,12 @@ describe('content integrity', () => {
             if (q.type === 'text' && q.answer.normalize !== 'keywords') expect(checkAnswer(q.answer.accept[0], q.answer)).toBe(true);
             if (q.type === 'choice') expect(q.correct).toBeLessThan(q.options.length);
           });
+          if (q.type === 'sql')
+            it(`${l.id}/${q.id}: SQL question grades its own solution`, async () => {
+              expect(l.sql, 'sql question needs lesson.sql').toBeDefined();
+              const g = await gradeSql(l.sql!.dataset, q.solution, q.solution, q.ordered);
+              expect(g.ok, g.reason).toBe(true);
+            });
         }
       }
     });
@@ -75,10 +97,18 @@ describe('content integrity', () => {
   it('placement questions are answerable', () => {
     for (const t of placementTopics)
       for (const q of t.questions) {
-        if (q.solution && q.scenario && !q.answer) expect(checkCommandAnswer(q.solution, q.scenario, q.solution).ok, q.id).toBe(true);
+        if (q.solution && q.scenario && !q.answer && q.type !== 'sql') expect(checkCommandAnswer(q.solution, q.scenario, q.solution).ok, q.id).toBe(true);
         if (q.answer && q.answer.normalize !== 'keywords') expect(checkAnswer(q.answer.accept[0], q.answer), q.id).toBe(true);
         if (q.options) expect(q.correct, q.id).toBeLessThan(q.options.length);
         expect(q.answer || q.solution || q.options, q.id).toBeTruthy();
+      }
+  });
+
+  it('placement SQL questions grade their own solutions', async () => {
+    for (const t of placementTopics)
+      for (const q of t.questions.filter((x) => x.type === 'sql')) {
+        const g = await gradeSql(q.dataset!, q.solution!, q.solution!, q.ordered);
+        expect(g.ok, `${q.id}: ${g.reason}`).toBe(true);
       }
   });
 });

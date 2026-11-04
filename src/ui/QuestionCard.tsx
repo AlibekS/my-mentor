@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { grade, kindOf, type Gradable } from '../engine/evaluateQuestion';
 import { Markdown } from './Markdown';
+import { gradeSql, type QueryResult } from '../sql/engine';
+import { ResultTable } from './SqlConsole';
 
 interface Props {
   q: Gradable & { prompt: string; explanation?: string; hint?: string };
@@ -17,21 +19,32 @@ interface Props {
   solved?: boolean;
   /** в состоянии «верно» сразу переходить дальше */
   autoNext?: boolean;
+  /** датасет SQL-урока (для вопросов type: 'sql') */
+  dataset?: string;
 }
 
-export function QuestionCard({ q, onAttempt, maxAttempts = 2, allowSkip, onSkip, onNext, nextLabel = 'Дальше →', hideAnswer, solved, autoNext }: Props) {
+export function QuestionCard({ q, onAttempt, maxAttempts = 2, allowSkip, onSkip, onNext, nextLabel = 'Дальше →', hideAnswer, solved, autoNext, dataset }: Props) {
   const [input, setInput] = useState('');
   const [choice, setChoice] = useState<number | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<'idle' | 'ok' | 'bad' | 'failed'>(solved ? 'ok' : 'idle');
   const [output, setOutput] = useState<string>();
+  const [sqlRes, setSqlRes] = useState<{ r: QueryResult; reason?: string } | null>(null);
+  const [busy, setBusy] = useState(false);
   const kind = kindOf(q);
 
-  const submit = () => {
+  const submit = async () => {
     const val = kind === 'choice' ? String(choice ?? '') : input;
-    if (!val.trim()) return;
+    if (!val.trim() || busy) return;
     const n = attempt + 1;
-    const r = grade(q, val);
+    let r: { ok: boolean; output?: string };
+    if (kind === 'sql') {
+      setBusy(true);
+      const g = await gradeSql(dataset ?? '', val, q.solution ?? '', q.ordered);
+      setBusy(false);
+      setSqlRes({ r: g.result, reason: g.ok ? undefined : g.reason });
+      r = { ok: g.ok };
+    } else r = grade(q, val);
     setAttempt(n);
     setOutput(r.output);
     onAttempt(r.ok, n);
@@ -55,6 +68,33 @@ export function QuestionCard({ q, onAttempt, maxAttempts = 2, allowSkip, onSkip,
             </label>
           ))}
         </fieldset>
+      ) : kind === 'sql' ? (
+        <form
+          className="sql-editor"
+          onSubmit={(e) => {
+            e.preventDefault();
+            submit();
+          }}
+        >
+          <label className="sr-only" htmlFor="qinput">SQL-запрос</label>
+          <textarea
+            id="qinput"
+            className="mono"
+            rows={5}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                submit();
+              }
+            }}
+            disabled={finished}
+            spellCheck={false}
+            placeholder="SELECT …   (Ctrl+Enter — проверить)"
+            autoFocus
+          />
+        </form>
       ) : (
         <form
           className="answer-row"
@@ -80,6 +120,12 @@ export function QuestionCard({ q, onAttempt, maxAttempts = 2, allowSkip, onSkip,
         </form>
       )}
       {output && kind === 'command' && <pre className="cmd-output">{output.replace(/\x1b\[[0-9;]*m/g, '').slice(0, 1200)}</pre>}
+      {sqlRes && (
+        <>
+          {sqlRes.reason && state !== 'ok' && <p className="muted small">{sqlRes.reason}</p>}
+          <ResultTable r={sqlRes.r} max={20} />
+        </>
+      )}
       {state === 'bad' && (
         <p className="feedback bad" role="status">
           Пока не то. Попробуй ещё раз{q.hint ? <> — подсказка: {q.hint}</> : '.'}
@@ -106,7 +152,7 @@ export function QuestionCard({ q, onAttempt, maxAttempts = 2, allowSkip, onSkip,
       )}
       <div className="qactions">
         {!finished && (
-          <button className="btn primary" onClick={submit} disabled={kind === 'choice' ? choice === null : !input.trim()}>
+          <button className="btn primary" onClick={submit} disabled={busy || (kind === 'choice' ? choice === null : !input.trim())}>
             Проверить
           </button>
         )}

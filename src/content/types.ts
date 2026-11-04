@@ -62,6 +62,8 @@ export interface Task {
   explanation?: string;
   /** Метки для статистики/ачивок: grep, awk, pipes, systemctl … */
   tags?: string[];
+  /** SQL-урок: важен ли порядок строк при сравнении с эталоном (solution) */
+  sqlOrdered?: boolean;
 }
 
 export type Question =
@@ -82,6 +84,16 @@ export type Question =
       solution: string;
       /** Иначе — сравнение вывода с выводом эталона; можно задать свою проверку */
       check?: Check;
+      explanation: string;
+      hint?: string;
+    }
+  | {
+      id: string;
+      type: 'sql';
+      prompt: string;
+      /** Запрос ученика и эталон выполняются на копиях БД урока и сравниваются по результату */
+      solution: string;
+      ordered?: boolean;
       explanation: string;
       hint?: string;
     }
@@ -108,6 +120,8 @@ export interface LessonDef {
   minutes: number;
   /** Окружение терминала по умолчанию */
   scenario: Scenario;
+  /** SQL-урок: вместо терминала — SQL-консоль с этой БД (CREATE TABLE + INSERT, диалект SQLite) */
+  sql?: { dataset: string };
   tasks: Task[];
   quiz: Question[];
   glossary?: GlossaryItem[];
@@ -166,6 +180,10 @@ export interface PlacementQuestion {
   options?: string[];
   correct?: number;
   explanation?: string;
+  /** SQL-вопрос: запрос сравнивается с solution на этой БД */
+  type?: 'sql';
+  dataset?: string;
+  ordered?: boolean;
 }
 
 export interface PlacementTopic {

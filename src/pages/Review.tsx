@@ -11,6 +11,8 @@ import { useStore } from '../state/store';
 import { Markdown } from '../ui/Markdown';
 import { QuestionCard } from '../ui/QuestionCard';
 import { Terminal } from '../ui/Terminal';
+import { SqlConsole } from '../ui/SqlConsole';
+import { gradeSql } from '../sql/engine';
 import { fmtDate } from '../ui/common';
 
 export function Review() {
@@ -46,9 +48,9 @@ export function Review() {
         <div>
           <p className="small muted">Осталось на сегодня: {due.length} · из урока «{lesson.title}»</p>
           {item.kind === 'question' ? (
-            <ReviewQuestion key={item.key} q={lesson.quiz.find((x) => x.id === item.itemId)} onDone={finish} />
+            <ReviewQuestion key={item.key} q={lesson.quiz.find((x) => x.id === item.itemId)} dataset={lesson.sql?.dataset} onDone={finish} />
           ) : (
-            <ReviewTask key={item.key} task={lesson.tasks.find((t) => t.id === item.itemId)} scenario={lesson.scenario} moduleId={lesson.moduleId} onDone={finish} />
+            <ReviewTask key={item.key} task={lesson.tasks.find((t) => t.id === item.itemId)} scenario={lesson.scenario} dataset={lesson.sql?.dataset} moduleId={lesson.moduleId} onDone={finish} />
           )}
         </div>
       )}
@@ -56,13 +58,13 @@ export function Review() {
   );
 }
 
-function ReviewQuestion({ q, onDone }: { q?: Question; onDone: (ok: boolean) => void }) {
+function ReviewQuestion({ q, onDone, dataset }: { q?: Question; onDone: (ok: boolean) => void; dataset?: string }) {
   const [ok, setOk] = useState(false);
   if (!q) return <button className="btn" onClick={() => onDone(true)}>Пропустить (вопрос удалён)</button>;
-  return <QuestionCard q={q} maxAttempts={1} onAttempt={(r) => setOk(r)} onNext={() => onDone(ok)} />;
+  return <QuestionCard q={q} dataset={dataset} maxAttempts={1} onAttempt={(r) => setOk(r)} onNext={() => onDone(ok)} />;
 }
 
-function ReviewTask({ task, scenario, moduleId, onDone }: { task?: Task; scenario: object; moduleId: string; onDone: (ok: boolean) => void }) {
+function ReviewTask({ task, scenario, moduleId, onDone, dataset }: { task?: Task; scenario: object; moduleId: string; onDone: (ok: boolean) => void; dataset?: string }) {
   const { update } = useStore();
   const shell = useMemo(() => new Shell(task?.scenario ?? scenario), [task, scenario]);
   const [solved, setSolved] = useState(false);
@@ -89,6 +91,15 @@ function ReviewTask({ task, scenario, moduleId, onDone }: { task?: Task; scenari
           <button className="btn ghost small" onClick={() => onDone(false)}>Не помню — повторить позже</button>
         </div>
       )}
+      {dataset ? (
+        <SqlConsole
+          dataset={dataset}
+          onRun={async (q) => {
+            if (task.answer) return;
+            if ((await gradeSql(dataset, q, task.solution, task.sqlOrdered)).ok) setSolved(true);
+          }}
+        />
+      ) : (
       <div className="term-box">
         <Terminal
           shell={shell}
@@ -98,6 +109,7 @@ function ReviewTask({ task, scenario, moduleId, onDone }: { task?: Task; scenari
           }}
         />
       </div>
+      )}
     </div>
   );
 }

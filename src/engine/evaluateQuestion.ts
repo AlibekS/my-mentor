@@ -12,9 +12,11 @@ export interface Gradable {
   options?: string[];
   correct?: number;
   type?: string;
+  ordered?: boolean;
 }
 
-export function kindOf(q: Gradable): 'choice' | 'command' | 'text' {
+export function kindOf(q: Gradable): 'choice' | 'command' | 'text' | 'sql' {
+  if (q.type === 'sql') return 'sql';
   if (q.options && q.correct !== undefined) return 'choice';
   if (q.type === 'command' || (!q.answer && q.solution && q.scenario)) return 'command';
   return 'text';
@@ -22,6 +24,7 @@ export function kindOf(q: Gradable): 'choice' | 'command' | 'text' {
 
 export function grade(q: Gradable, input: string): { ok: boolean; output?: string } {
   const k = kindOf(q);
+  if (k === 'sql') throw new Error('sql questions are graded with gradeSql');
   if (k === 'choice') return { ok: Number(input) === q.correct };
   if (k === 'command') return checkCommandAnswer(input, q.scenario ?? {}, q.solution ?? '', q.check);
   return { ok: !!q.answer && checkAnswer(input, q.answer) };

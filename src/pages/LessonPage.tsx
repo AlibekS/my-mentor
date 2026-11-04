@@ -14,7 +14,14 @@ import { useStore } from '../state/store';
 import { Markdown } from '../ui/Markdown';
 import { QuestionCard } from '../ui/QuestionCard';
 import { Terminal } from '../ui/Terminal';
+import { SqlConsole } from '../ui/SqlConsole';
+import { gradeSql, resultText, type QueryResult } from '../sql/engine';
 import { ProgressBar, plural } from '../ui/common';
+
+/** Запуск SQL-запроса как запись истории (для статистики и ментора) */
+export function sqlRecord(query: string, r: QueryResult): ExecRecord {
+  return { line: query.trim(), commands: ['sql'], pipes: 0, stdout: r.ok ? resultText(r) : '', stderr: r.ok ? '' : r.error, exitCode: r.ok ? 0 : 1 };
+}
 
 type Step = 'theory' | 'practice' | 'quiz' | 'summary';
 const STEPS: { id: Step; label: string }[] = [
@@ -138,8 +145,12 @@ function TheoryStep({ module, lesson, base }: { module: Module; lesson: Lesson; 
           </div>
         </section>
         <section className={`pane term ${tab === 'term' ? 'show' : ''}`}>
-          <div className="term-title">Песочница — пробуй команды из теории. Здесь ничего не проверяется.</div>
-          <Terminal shell={shell} banner={'\x1b[2mПесочница урока. help — список команд, man <команда> — справка.\x1b[0m'} onExec={(rec) => update((p) => recordCommand(p, rec, module.id))} />
+          <div className="term-title">Песочница — пробуй {lesson.sql ? 'запросы' : 'команды'} из теории. Здесь ничего не проверяется.</div>
+          {lesson.sql ? (
+            <SqlConsole dataset={lesson.sql.dataset} onRun={(q, r) => update((p) => recordCommand(p, sqlRecord(q, r), module.id))} />
+          ) : (
+            <Terminal shell={shell} banner={'\x1b[2mПесочница урока. help — список команд, man <команда> — справка.\x1b[0m'} onExec={(rec) => update((p) => recordCommand(p, rec, module.id))} />
+          )}
         </section>
       </div>
     </>
@@ -209,6 +220,21 @@ function PracticeStep({ module, lesson, base }: { module: Module; lesson: Lesson
     mentorContext.set((c) => ({ ...c, terminal: termLog.current.slice(-8).map((r) => ({ line: r.line, output: (r.stdout + r.stderr).slice(0, 600), exitCode: r.exitCode })) }));
     update((p) => recordCommand(p, rec, module.id));
     if (!tp?.solved && task.check && !task.answer && evaluate(task.check, shell, rec)) solve(rec.commands);
+  };
+
+  const [sqlFeedback, setSqlFeedback] = useState<string | null>(null);
+  useEffect(() => setSqlFeedback(null), [task, resetN]);
+  const onSql = async (query: string, r: QueryResult) => {
+    const rec = sqlRecord(query, r);
+    termLog.current.push(rec);
+    mentorContext.set((c) => ({ ...c, terminal: termLog.current.slice(-8).map((x) => ({ line: x.line, output: (x.stdout + x.stderr).slice(0, 800), exitCode: x.exitCode })) }));
+    update((p) => recordCommand(p, rec, module.id));
+    if (tp?.solved || task.answer || !lesson.sql) return;
+    const g = await gradeSql(lesson.sql.dataset, query, task.solution, task.sqlOrdered);
+    if (g.ok) {
+      setSqlFeedback(null);
+      solve(['sql']);
+    } else if (r.ok && r.columns.length) setSqlFeedback(g.reason ?? null);
   };
 
   const submitAnswer = () => {
@@ -289,7 +315,12 @@ function PracticeStep({ module, lesson, base }: { module: Module; lesson: Lesson
               </div>
             )}
           </div>
+          {sqlFeedback && !tp?.solved && <p className="feedback bad small" role="status">Пока не совпадает с ожидаемым: {sqlFeedback}</p>}
+          {lesson.sql ? (
+            <SqlConsole dataset={lesson.sql.dataset} onRun={onSql} resetKey={resetN} />
+          ) : (
           <Terminal key={`${envKey}-${resetN}`} shell={shell} onExec={onExec} autoFocus banner={`\x1b[2m${lesson.kind === 'boss' ? 'Инцидент в процессе — действуй как L3.' : 'Окружение урока.'} help — список команд, man <команда> — справка.\x1b[0m`} />
+          )}
         </section>
       </div>
     </>
@@ -307,7 +338,7 @@ function QuizStep({ module, lesson, base }: { module: Module; lesson: Lesson; ba
 
   useEffect(() => {
     if (!q) return;
-    mentorContext.set((c) => ({ ...c, step: 'quiz', task: undefined, question: { id: q.id, prompt: q.prompt, explanation: q.explanation, solution: q.type === 'command' ? q.solution : q.type === 'text' ? q.answer.accept[0] : q.options[q.correct] } }));
+    mentorContext.set((c) => ({ ...c, step: 'quiz', task: undefined, question: { id: q.id, prompt: q.prompt, explanation: q.explanation, solution: q.type === 'command' || q.type === 'sql' ? q.solution : q.type === 'text' ? q.answer.accept[0] : q.options[q.correct] } }));
   }, [q]);
 
   const finish = () => {
@@ -332,6 +363,7 @@ function QuizStep({ module, lesson, base }: { module: Module; lesson: Lesson; ba
         <QuestionCard
           key={q.id}
           q={q}
+          dataset={lesson.sql?.dataset}
           solved={lp?.quiz[q.id]?.correct}
           onAttempt={(ok, n) =>
             update((p) => {
