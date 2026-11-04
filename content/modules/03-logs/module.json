@@ -1,0 +1,31 @@
+{
+  "id": "03-logs",
+  "order": 3,
+  "title": "Логи и поиск",
+  "titleEn": "Logs & Search",
+  "short": "grep, пайпы, sort | uniq -c, awk/cut, разбор access/error логов, journalctl.",
+  "description": "Главный навык L3: за минуты найти в гигабайтах логов, что сломалось, когда началось и у кого. Фильтрация, подсчёт, топ-N, поля, регулярные выражения, корреляция по request id.",
+  "icon": "📜",
+  "importance": 5,
+  "requires": [
+    "02-linux-files"
+  ],
+  "skills": [
+    "считаю ошибки командой `grep -c`",
+    "строю топ IP через `sort | uniq -c | sort -rn`",
+    "достаю поля через `awk '{print $9}'`",
+    "нахожу момент начала инцидента по логам"
+  ],
+  "topics": [
+    "grep и его флаги",
+    "Пайпы, sort, uniq, wc, топ-N",
+    "Поля: cut и awk, формат access.log",
+    "Регулярки, окна времени, tail -f, journalctl",
+    "Error-логи, stack trace, request id"
+  ],
+  "reviewedAt": "2026-11-04",
+  "demand": "rising",
+  "marketNote": "Разбор логов и triage — ключевая обязанность в вакансиях L3 и Production Support; растёт спрос на работу с централизованными логами (ELK, Datadog, Loki).",
+  "status": "ready",
+  "estimatedMinutes": 150
+}

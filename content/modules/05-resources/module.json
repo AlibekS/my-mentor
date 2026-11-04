@@ -1,0 +1,29 @@
+{
+  "id": "05-resources",
+  "order": 5,
+  "title": "Ресурсы: диск, память, CPU",
+  "titleEn": "Resources",
+  "short": "df, du, free, uptime/load average, «диск забит», утечка памяти, OOM.",
+  "description": "Классические инциденты по ресурсам: закончилось место, удалённый, но открытый файл, OOM killer, высокий load average. Как найти виновника и что делать прямо сейчас.",
+  "icon": "📊",
+  "importance": 4,
+  "requires": [
+    "04-processes"
+  ],
+  "skills": [
+    "понимаю `df -h` и нахожу, что съело диск, через `du -sh`",
+    "читаю `free -h` и знаю, почему важен available",
+    "объясняю load average",
+    "нахожу следы OOM killer в журнале"
+  ],
+  "topics": [
+    "df/du и «диск забит»",
+    "free, swap, OOM killer",
+    "load average, CPU, iowait",
+    "Удалённые, но открытые файлы (lsof +L1)"
+  ],
+  "reviewedAt": "2026-11-04",
+  "demand": "stable",
+  "status": "ready",
+  "estimatedMinutes": 120
+}

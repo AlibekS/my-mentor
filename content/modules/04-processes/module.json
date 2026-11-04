@@ -1,0 +1,31 @@
+{
+  "id": "04-processes",
+  "order": 4,
+  "title": "Процессы и сервисы",
+  "titleEn": "Processes & Services",
+  "short": "ps, top, kill, systemctl, journalctl, коды выхода.",
+  "description": "Что запущено, кто ест CPU, почему сервис не стартует, как правильно перезапускать и что значит код выхода.",
+  "icon": "⚙️",
+  "importance": 4,
+  "requires": [
+    "02-linux-files"
+  ],
+  "skills": [
+    "нахожу процесс, который занял порт 8080",
+    "читаю `systemctl status` и понимаю, почему сервис failed",
+    "знаю разницу между `kill` и `kill -9`",
+    "смотрю логи сервиса через `journalctl -u`"
+  ],
+  "topics": [
+    "ps aux и top",
+    "Сигналы и kill",
+    "systemd: systemctl status/start/restart/enable",
+    "journalctl -u -p --since",
+    "Коды выхода и $?"
+  ],
+  "reviewedAt": "2026-11-04",
+  "demand": "stable",
+  "marketNote": "systemd и диагностика сервисов нужны везде, где есть VM/bare-metal; в Kubernetes-окружениях часть навыков переходит на kubectl.",
+  "status": "ready",
+  "estimatedMinutes": 150
+}

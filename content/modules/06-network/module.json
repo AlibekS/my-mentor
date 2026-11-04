@@ -1,0 +1,32 @@
+{
+  "id": "06-network",
+  "order": 6,
+  "title": "Сеть и API для L3",
+  "titleEn": "Networking & APIs for L3",
+  "short": "ip, ss, ping, traceroute, dig, curl -v, HTTP-коды, TLS, DNS, REST/JSON.",
+  "description": "Сетевая диагностика от DNS до TLS и HTTP: почему 502/504, куда идёт трафик, истёк ли сертификат, что вернул API. Отдельно — REST, JSON, заголовки, OAuth-токены: в SaaS-поддержке это ежедневная работа.",
+  "icon": "🌐",
+  "importance": 5,
+  "requires": [
+    "02-linux-files"
+  ],
+  "skills": [
+    "читаю вывод `ss -tulpn`",
+    "понимаю, почему `dig` возвращает NXDOMAIN",
+    "по `curl -v` вижу, на каком этапе падает запрос",
+    "объясняю разницу 502 и 504"
+  ],
+  "topics": [
+    "ip, ss, порты",
+    "ping, traceroute",
+    "DNS: dig, nslookup, NXDOMAIN, TTL",
+    "HTTP-коды и curl -v / -I",
+    "TLS-сертификаты, openssl s_client",
+    "REST API, JSON, jq, токены"
+  ],
+  "reviewedAt": "2026-11-04",
+  "demand": "rising",
+  "marketNote": "В вакансиях SaaS-поддержки L2/L3 постоянно встречаются REST/HTTP/JSON, Postman/cURL и разбор API-интеграций (webhooks, OAuth).",
+  "status": "ready",
+  "estimatedMinutes": 200
+}

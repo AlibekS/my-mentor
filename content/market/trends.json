@@ -1,0 +1,19 @@
+{
+  "updatedAt": "2026-11-04",
+  "summary": "Роль L3 / Production Support смещается от «админа серверов» к инженеру, который разбирает инциденты в облачных и SaaS-системах: логи и метрики, SQL, HTTP/API, Kubernetes и чёткая коммуникация. Ручное администрирование гипервизоров и on-prem «железа» уходит в нишу, автоматизация и наблюдаемость — растут. Курс расставляет приоритеты именно так.",
+  "items": [
+    { "name": "Kubernetes (AKS/EKS/GKE/OpenShift)", "category": "контейнеры", "demand": "rising", "note": "Из «nice to have» стал ожидаемым навыком в L3-вакансиях; CKA/CKAD — плюс.", "inCourse": "модуль 9" },
+    { "name": "Observability: Datadog, Grafana/Prometheus, OpenTelemetry", "category": "наблюдаемость", "demand": "rising", "note": "Расследования «от метрик», корреляция логов и трейсов; OpenTelemetry — открытый стандарт.", "inCourse": "модуль 10" },
+    { "name": "SQL (PostgreSQL, MS SQL)", "category": "данные", "demand": "rising", "note": "Почти в каждой вакансии: от запросов для расследований до разбора производительности.", "inCourse": "модуль 7" },
+    { "name": "REST API, HTTP, JSON, OAuth, Postman/cURL", "category": "SaaS/API", "demand": "rising", "note": "Ежедневная работа в SaaS-поддержке: интеграции, webhooks, токены, разбор payload.", "inCourse": "модуль 6" },
+    { "name": "Incident management, RCA, постмортемы, on-call", "category": "процессы", "demand": "rising", "note": "Центральная часть L3; PagerDuty/Opsgenie/incident.io.", "inCourse": "модули 1 и 11" },
+    { "name": "AI-ассистенты в поддержке и AIOps", "category": "инструменты", "demand": "rising", "note": "Триаж, саммари инцидентов, поиск по базе знаний с LLM. Важно уметь проверять выводы ИИ по логам и данным.", "inCourse": "ментор на сайте; тема в модулях 10–11" },
+    { "name": "Linux, Bash", "category": "база", "demand": "stable", "note": "Базовое требование, даже в облаке: логи, процессы, сеть, права.", "inCourse": "модули 2–5, 8" },
+    { "name": "Python для автоматизации", "category": "скрипты", "demand": "stable", "note": "Часто указан вместе с Bash для автоматизации проверок и разборов данных.", "inCourse": "модуль 8 (основы)" },
+    { "name": "ITIL/ITSM: ServiceNow, Jira Service Management", "category": "процессы", "demand": "stable", "note": "Словарь ITIL и тикет-системы встречаются почти везде; сертификат — не обязателен.", "inCourse": "модуль 1" },
+    { "name": "Облака: AWS / Azure / GCP (базово)", "category": "облака", "demand": "stable", "note": "L3 ожидают понимание managed-сервисов (балансировщики, RDS, IAM) на уровне диагностики.", "inCourse": "в модулях 6, 9, 10" },
+    { "name": "VMware vSphere (on-prem виртуализация)", "category": "инфраструктура", "demand": "declining", "note": "После смены лицензирования Broadcom многие компании сокращают VMware-инфраструктуру и уходят в облака/альтернативы; как основной навык для L3 в SaaS — теряет вес.", "inCourse": "не входит в курс" },
+    { "name": "Ручное администрирование «железа» и Windows-серверов без автоматизации", "category": "инфраструктура", "demand": "declining", "note": "Уходит в managed-сервисы и IaC; ценится умение автоматизировать, а не «кликать».", "inCourse": "не входит в курс" },
+    { "name": "Nagios/Zabbix как единственный мониторинг", "category": "наблюдаемость", "demand": "declining", "note": "Встречается в legacy, но новые системы строят на Prometheus/Datadog/OTel.", "inCourse": "упоминается для контекста" }
+  ]
+}
