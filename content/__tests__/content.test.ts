@@ -8,6 +8,7 @@ import { stripAnsi } from '../../src/shell/shell';
 import { gradeSql, openDb, runQuery, resultText } from '../../src/sql/engine';
 import { evalQuery, sameResult } from '../../src/obs/promql';
 import { searchLogs } from '../../src/obs/kql';
+import { checkRubric } from '../../src/engine/rubric';
 
 /**
  * Проверка целостности контента: эталонные решения проходят собственные проверки.
@@ -41,6 +42,15 @@ describe('content integrity', () => {
         // задания без своего сценария работают в общем окружении урока — по порядку
         let shared: Shell | null = null;
         for (const t of l.tasks) {
+          if (t.write) {
+            it(`${l.id}/${t.id}: sample text passes rubric, template does not`, () => {
+              expect(t.hints.length).toBeLessThanOrEqual(3);
+              const r = checkRubric(t.solution, t.write!);
+              expect(r.ok, `rubric fails on solution: ${JSON.stringify(r.items.filter((i) => !i.ok))} words=${r.words}`).toBe(true);
+              expect(checkRubric(t.write!.template ?? '', t.write!).ok, 'template alone must not pass').toBe(false);
+            });
+            continue;
+          }
           if (l.obs) {
             it(`${l.id}/${t.id}: observability task is solvable`, () => {
               expect(t.hints.length).toBeLessThanOrEqual(3);

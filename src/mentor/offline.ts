@@ -9,6 +9,8 @@ export function offlineAnswer(text: string, ctx: MentorContext, allowSolution: b
   const task = ctx.task;
   if (allowSolution && task) return `Готовое решение задания ${task.index}:\n\n\`\`\`\n${task.solution}\n\`\`\`\n\n${task.explanation ?? ''}\n\n_За задание теперь 0 XP — но набери команду сам, так она запомнится._`;
   if (allowSolution && ctx.question?.solution) return `Ответ: \`${ctx.question.solution}\`\n\n${ctx.question.explanation ?? ''}`;
+  if (/^разбери мой текст/.test(t))
+    return 'В офлайн-режиме я не могу оценить текст по смыслу — ориентируйся на чек-лист под редактором. Проверь: есть ли время с часовым поясом (UTC), влияние на клиентов, что уже сделано и когда следующий апдейт. Для полноценного разбора подключи Claude (см. README).';
   if (/прогресс|как у меня|статист|готов/.test(t))
     return `Твоя готовность к роли L3 — **${summary.readinessPct}%**.${summary.nextLesson ? ` Следующий шаг: **${summary.nextLesson}**.` : ''}${summary.weakSpots.length ? `\n\nСлабые места (стоит повторить):\n${summary.weakSpots.map((w) => `- ${w}`).join('\n')}` : ''}`;
   if (task && /подсказ|намекни|hint/.test(t)) {

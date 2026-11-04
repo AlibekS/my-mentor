@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { mentorContext } from './context';
+import { mentorAsk } from './ask';
 import { asksForSolution, progressSummary, publicContext } from './summary';
 import { OFFLINE_NOTE, offlineAnswer } from './offline';
 import { useStore } from '../state/store';
@@ -16,11 +17,14 @@ export function MentorWidget() {
   const ctx = mentorContext.use();
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useState<Status>(null);
+  const statusRef = useRef<Status>(null);
+  statusRef.current = status;
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [streaming, setStreaming] = useState('');
   const listRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const ask = mentorAsk.use();
   const threadKey = ctx.lesson?.key ?? 'general';
   const messages: MentorMessage[] = progress.mentor[threadKey] ?? [];
 
@@ -61,7 +65,7 @@ export function MentorWidget() {
     update((p) => p.stats.mentorQuestions++);
     if (allowSolution) ctx.onSolutionRevealed?.();
     const summary = progressSummary(progress);
-    if (!status?.available) {
+    if (!statusRef.current?.available) {
       push({ role: 'assistant', text: offlineAnswer(text, ctx, allowSolution, summary), ts: Date.now() });
       return;
     }
@@ -99,6 +103,25 @@ export function MentorWidget() {
       abortRef.current = null;
     }
   };
+
+  // запрос из урока («Разбор ментором»)
+  const lastAsk = useRef(0);
+  useEffect(() => {
+    if (!ask || ask.ts === lastAsk.current) return;
+    lastAsk.current = ask.ts;
+    setOpen(true);
+    const go = () => send(ask.text);
+    if (status) go();
+    else
+      fetch('/api/mentor/status')
+        .then((r) => (r.ok ? r.json() : { available: false }))
+        .catch(() => ({ available: false }))
+        .then((st) => {
+          statusRef.current = st;
+          setStatus(st);
+          setTimeout(go, 0);
+        });
+  }, [ask]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const where = ctx.task ? `Задание ${ctx.task.index}/${ctx.task.total} · ${ctx.lesson?.title}` : ctx.question ? `Мини-тест · ${ctx.lesson?.title}` : ctx.lesson ? `Урок · ${ctx.lesson.title}` : 'Общий чат';
   return (

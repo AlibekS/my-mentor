@@ -14,6 +14,7 @@ import { useStore } from '../state/store';
 import { Markdown } from '../ui/Markdown';
 import { QuestionCard } from '../ui/QuestionCard';
 import { Terminal } from '../ui/Terminal';
+import { WriteBox } from '../ui/WriteBox';
 import { SqlConsole } from '../ui/SqlConsole';
 import { ObsConsole, type ObsKind } from '../ui/ObsConsole';
 import { evalQuery, sameResult } from '../obs/promql';
@@ -305,6 +306,9 @@ function PracticeStep({ module, lesson, base }: { module: Module; lesson: Lesson
           </div>
           <div className="task-panel">
             <Markdown text={`**Задание ${idx + 1}/${lesson.tasks.length}.** ${task.prompt}`} />
+            {task.write && (
+              <WriteBox key={task.id} spec={task.write} taskPrompt={task.prompt} solved={!!tp?.solved} storageKey={`l3quest.draft.${lesson.key}.${task.id}`} onSolved={() => solve(['write'])} />
+            )}
             {task.answer && !tp?.solved && (
               <form className="answer-row" onSubmit={(e) => { e.preventDefault(); submitAnswer(); }}>
                 <label htmlFor="task-answer">{task.answer.label ?? 'Ответ:'}</label>

@@ -11,6 +11,7 @@ import { useStore } from '../state/store';
 import { Markdown } from '../ui/Markdown';
 import { QuestionCard } from '../ui/QuestionCard';
 import { Terminal } from '../ui/Terminal';
+import { WriteBox } from '../ui/WriteBox';
 import { SqlConsole } from '../ui/SqlConsole';
 import { gradeSql } from '../sql/engine';
 import { ObsConsole } from '../ui/ObsConsole';
@@ -78,6 +79,7 @@ function ReviewTask({ task, scenario, moduleId, onDone, dataset, obs }: { task?:
   return (
     <div className="card">
       <Markdown text={task.prompt} />
+      {task.write && !solved && <WriteBox spec={task.write} taskPrompt={task.prompt} solved={false} storageKey={`l3quest.review.${task.id}`} onSolved={() => setSolved(true)} />}
       {task.answer && !solved && (
         <form className="answer-row" onSubmit={(e) => { e.preventDefault(); if (checkAnswer(ans, task.answer!)) setSolved(true); }}>
           <input value={ans} onChange={(e) => setAns(e.target.value)} placeholder="Ответ" aria-label="Ответ" />

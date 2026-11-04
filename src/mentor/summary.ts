@@ -48,6 +48,7 @@ export function publicContext(ctx: MentorContext, allowSolution: boolean) {
   const { onSolutionRevealed: _cb, nextHint: _nh, ...rest } = ctx;
   const out: Record<string, unknown> = { ...rest };
   if (rest.lesson) out.lesson = { ...rest.lesson, theory: rest.lesson.theory.slice(0, 6000) };
+  if (rest.draft) out.draft = rest.draft.slice(0, 4000);
   if (rest.task) {
     const { solution, hints, ...t } = rest.task;
     out.task = { ...t, hintsAlreadyShown: hints.slice(0, rest.task.hintsUsed), hintsNotShownYet: hints.slice(rest.task.hintsUsed), ...(allowSolution ? { solution } : {}) };

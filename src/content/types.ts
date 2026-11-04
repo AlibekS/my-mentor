@@ -67,6 +67,28 @@ export interface Task {
   sqlOrdered?: boolean;
   /** Урок наблюдаемости: задание засчитывается, когда результат запроса совпал с solution */
   obs?: 'promql' | 'logs';
+  /** Письменное задание: текст проверяется по чек-листу обязательных элементов (solution — пример) */
+  write?: WriteSpec;
+}
+
+export interface RubricItem {
+  /** что должно быть в тексте (показывается в чек-листе) */
+  label: string;
+  /** регулярные выражения (без учёта регистра); достаточно совпадения любого */
+  any?: string[];
+  /** ни одно из этих выражений не должно встречаться (например, внутренний жаргон) */
+  none?: string[];
+  /** сколько раз должно совпасть any[0] (по строкам) — например, 5 строк «Почему … — …» */
+  minMatches?: number;
+}
+
+export interface WriteSpec {
+  rubric: RubricItem[];
+  minWords?: number;
+  lang?: 'en' | 'ru';
+  /** заготовка в редакторе */
+  template?: string;
+  rows?: number;
 }
 
 export type Question =

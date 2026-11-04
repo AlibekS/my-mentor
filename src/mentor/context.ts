@@ -13,6 +13,8 @@ export interface MentorContext {
   task?: Pick<Task, 'id' | 'prompt' | 'hints' | 'solution' | 'explanation'> & { index: number; total: number; hintsUsed: number; solved: boolean };
   question?: Pick<Question, 'id' | 'prompt' | 'explanation'> & { solution?: string };
   terminal?: { line: string; output: string; exitCode: number }[];
+  /** черновик письменного задания */
+  draft?: string;
   /** вызвать, когда ментор выдал готовое решение (XP за задание = 0) */
   onSolutionRevealed?: () => void;
   /** выдать следующую подсказку задания (засчитывается как подсказка) */
