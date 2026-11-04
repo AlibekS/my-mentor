@@ -301,6 +301,8 @@ input:focus, textarea:focus { border-color: var(--cyan); outline: none; box-shad
 .t-rising h2 { color: var(--green); }
 .t-declining h2 { color: var(--red); }
 .table { width: 100%; border-collapse: collapse; }
+/* широкие таблицы на телефоне прокручиваются внутри карточки, а не всей страницей */
+.table-wrap { overflow-x: auto; max-width: 100%; }
 .table th, .table td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
 .stale { color: var(--amber); }
 

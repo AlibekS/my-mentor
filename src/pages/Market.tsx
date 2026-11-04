@@ -43,6 +43,7 @@ export function Market() {
       </div>
       <section className="card">
         <h2>Сверка модулей с рынком</h2>
+        <div className="table-wrap">
         <table className="table">
           <thead><tr><th>Модуль</th><th>Спрос</th><th>Сверено</th><th>Комментарий</th></tr></thead>
           <tbody>
@@ -56,6 +57,7 @@ export function Market() {
             ))}
           </tbody>
         </table>
+        </div>
       </section>
     </div>
   );

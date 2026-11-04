@@ -127,6 +127,16 @@ async function handleAsk(req: IncomingMessage, res: ServerResponse) {
   child.stdin.end(buildPrompt(body));
 }
 
+const isLocalHost = (host: string) => /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(host);
+
+export function isLocalOrigin(origin: string): boolean {
+  try {
+    return isLocalHost(new URL(origin).host);
+  } catch {
+    return false;
+  }
+}
+
 function middleware(): Connect.NextHandleFunction {
   return (req, res, next) => {
     const url = req.url ?? '';
@@ -140,7 +150,10 @@ function middleware(): Connect.NextHandleFunction {
     if (url === '/api/mentor' && req.method === 'POST') {
       // только локальные запросы
       const host = req.headers.host ?? '';
-      if (!/^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(host)) {
+      const origin = req.headers.origin;
+      // чужой сайт в браузере не должен тратить вашу подписку: Origin (если есть) — только локальный,
+      // а application/json заставляет браузер делать preflight для кросс-доменных запросов
+      if (!isLocalHost(host) || (origin && !isLocalOrigin(origin)) || !/^application\/json\b/i.test(req.headers['content-type'] ?? '')) {
         res.statusCode = 403;
         res.end('mentor is available only on localhost');
         return;
