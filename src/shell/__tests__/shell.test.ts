@@ -1,0 +1,201 @@
+import { describe, it, expect } from 'vitest';
+import { Shell } from '../shell';
+import { parse } from '../parser';
+
+const ACCESS = [
+  '10.0.0.1 - - [04/Nov/2026:13:40:01 +0500] "GET /api/orders HTTP/1.1" 200 512',
+  '10.0.0.2 - - [04/Nov/2026:13:41:12 +0500] "GET /api/pay HTTP/1.1" 502 157',
+  '10.0.0.1 - - [04/Nov/2026:13:45:30 +0500] "POST /api/pay HTTP/1.1" 502 157',
+  '10.0.0.3 - - [04/Nov/2026:14:01:02 +0500] "GET /health HTTP/1.1" 200 2',
+  '10.0.0.1 - - [04/Nov/2026:14:10:44 +0500] "GET /api/pay HTTP/1.1" 500 98',
+].join('\n') + '\n';
+
+const mk = () =>
+  new Shell({
+    files: {
+      '/var/log/nginx/access.log': ACCESS,
+      '/var/log/nginx/error.log': '2026/11/04 13:41:12 [error] upstream timed out\n2026/11/04 13:45:30 [error] connect() failed (111: Connection refused)\n',
+      '/etc/secret.conf': { content: 'password=1', mode: 0o600 },
+    },
+  });
+
+describe('parser', () => {
+  it('handles quotes, pipes, redirects and operators', () => {
+    const r = parse(`grep "a b" 'c|d' file | wc -l > out.txt && echo ok; ls`);
+    expect(r).toHaveLength(3);
+    expect(r[0].pipeline.commands).toHaveLength(2);
+    expect(r[0].pipeline.commands[0].words.map((w) => w.value)).toEqual(['grep', 'a b', 'c|d', 'file']);
+    expect(r[0].pipeline.commands[1].redirects).toEqual([{ type: '>', target: 'out.txt' }]);
+    expect(r[1].op).toBe('&&');
+    expect(r[2].op).toBe(';');
+  });
+  it('expands variables except in single quotes', () => {
+    const r = parse(`echo $HOME "$USER" '$USER'`, { HOME: '/home/a', USER: 'a' });
+    expect(r[0].pipeline.commands[0].words.map((w) => w.value)).toEqual(['echo', '/home/a', 'a', '$USER']);
+  });
+  it('reports syntax errors', () => {
+    expect(() => parse('ls |')).toThrow();
+    expect(() => parse('echo "abc')).toThrow();
+  });
+});
+
+describe('shell basics', () => {
+  it('prompt and navigation', () => {
+    const sh = mk();
+    expect(sh.prompt()).toBe('alibek@srv-prod-01:~$ ');
+    sh.run('cd /var/log/nginx');
+    expect(sh.run('pwd').stdout).toBe('/var/log/nginx\n');
+    expect(sh.prompt()).toBe('alibek@srv-prod-01:/var/log/nginx$ ');
+    sh.run('cd ..');
+    expect(sh.cwd).toBe('/var/log');
+    expect(sh.run('cd /nope').stderr).toContain('No such file or directory');
+  });
+
+  it('command not found', () => {
+    const r = mk().run('foobar');
+    expect(r.stderr).toBe('foobar: command not found\n');
+    expect(r.exitCode).toBe(127);
+  });
+
+  it('ls -la shows owner and mode', () => {
+    const out = mk().run('ls -la /etc').stdout;
+    expect(out).toMatch(/-rw------- 1 root root .* secret\.conf/);
+  });
+
+  it('permissions: cat denied, sudo works', () => {
+    const sh = mk();
+    expect(sh.run('cat /etc/secret.conf').stderr).toContain('Permission denied');
+    expect(sh.run('sudo cat /etc/secret.conf').stdout).toBe('password=1');
+  });
+
+  it('redirects create files and append', () => {
+    const sh = mk();
+    sh.run('echo one > /tmp/a.txt');
+    sh.run('echo two >> /tmp/a.txt');
+    expect(sh.run('cat /tmp/a.txt').stdout).toBe('one\ntwo\n');
+    expect(sh.run('wc -l < /tmp/a.txt').stdout).toBe('2\n');
+  });
+
+  it('&& and || respect exit codes', () => {
+    const sh = mk();
+    expect(sh.run('false && echo yes || echo no').stdout).toBe('no\n');
+    expect(sh.run('true && echo yes').stdout).toBe('yes\n');
+  });
+
+  it('glob expansion', () => {
+    const sh = mk();
+    expect(sh.run('ls /var/log/nginx/*.log').stdout).toContain('/var/log/nginx/access.log');
+  });
+
+  it('tab completion for commands and paths', () => {
+    const sh = mk();
+    expect(sh.complete('jour').options).toContain('journalctl');
+    expect(sh.complete('cat /var/log/ng').options).toEqual(['/var/log/nginx/']);
+  });
+});
+
+describe('text processing', () => {
+  it('grep flags', () => {
+    const sh = mk();
+    expect(sh.run('grep -c " 502 " /var/log/nginx/access.log').stdout).toBe('2\n');
+    expect(sh.run('grep " 502 " /var/log/nginx/access.log | wc -l').stdout).toBe('2\n');
+    expect(sh.run('grep -i ERROR /var/log/nginx/error.log | wc -l').stdout).toBe('2\n');
+    expect(sh.run('grep -v " 200 " /var/log/nginx/access.log | wc -l').stdout).toBe('3\n');
+    expect(sh.run('grep -n refused /var/log/nginx/error.log').stdout).toMatch(/^2:/);
+    expect(sh.run('grep -E " 50[02] " /var/log/nginx/access.log | wc -l').stdout).toBe('3\n');
+    expect(sh.run('grep -r upstream /var/log').stdout).toContain('/var/log/nginx/error.log:');
+    expect(sh.run('grep nothing /var/log/nginx/error.log').exitCode).toBe(1);
+  });
+
+  it('sort | uniq -c | sort -rn top IPs', () => {
+    const out = mk().run("awk '{print $1}' /var/log/nginx/access.log | sort | uniq -c | sort -rn | head -1").stdout;
+    expect(out.trim()).toBe('3 10.0.0.1');
+  });
+
+  it('cut fields', () => {
+    expect(mk().run("cut -d' ' -f1 /var/log/nginx/access.log | sort -u | wc -l").stdout).toBe('3\n');
+  });
+
+  it('awk conditions, sums and arrays', () => {
+    const sh = mk();
+    expect(sh.run("awk '$9 == 502 {print $7}' /var/log/nginx/access.log").stdout).toBe('/api/pay\n/api/pay\n');
+    expect(sh.run("awk '{s += $10} END {print s}' /var/log/nginx/access.log").stdout).toBe('926\n');
+    expect(sh.run("awk '$9 >= 500 {c[$9]++} END {for (k in c) print k, c[k]}' /var/log/nginx/access.log | sort").stdout).toBe('500 1\n502 2\n');
+    expect(sh.run("awk -F: '{print $1}' /etc/passwd | head -2").stdout).toBe('root\nwww-data\n');
+    expect(sh.run("awk 'NR==2' /var/log/nginx/access.log").stdout).toContain('13:41:12');
+    expect(sh.run("awk '/POST/ {print $1}' /var/log/nginx/access.log").stdout).toBe('10.0.0.1\n');
+    expect(sh.run("awk '{print $NF}' /var/log/nginx/access.log | head -1").stdout).toBe('512\n');
+    expect(sh.run("awk '{print \"ip=\" $1}' /var/log/nginx/access.log | head -1").stdout).toBe('ip=10.0.0.1\n');
+  });
+
+  it('sed substitute and print range', () => {
+    const sh = mk();
+    expect(sh.run("echo hello world | sed 's/world/L3/'").stdout).toBe('hello L3\n');
+    expect(sh.run("sed -n '2,3p' /var/log/nginx/access.log | wc -l").stdout).toBe('2\n');
+  });
+
+  it('head/tail', () => {
+    const sh = mk();
+    expect(sh.run('head -n 2 /var/log/nginx/access.log | wc -l').stdout).toBe('2\n');
+    expect(sh.run('tail -1 /var/log/nginx/access.log').stdout).toContain('14:10:44');
+  });
+
+  it('find by name, type and size', () => {
+    const sh = new Shell({ files: { '/var/log/big.log': { content: '', size: 300 * 1024 * 1024 }, '/var/log/small.log': 'x' } });
+    expect(sh.run('find /var/log -name "*.log" -size +100M').stdout).toBe('/var/log/big.log\n');
+    expect(sh.run('find /var/log -type f | wc -l').stdout).toBe('2\n');
+  });
+});
+
+describe('system simulation', () => {
+  const svcShell = () =>
+    new Shell({
+      services: [
+        {
+          name: 'nginx',
+          description: 'A high performance web server',
+          active: 'failed',
+          enabled: true,
+          logs: [{ time: '2026-11-04 14:00:00', priority: 'err', message: 'bind() to 0.0.0.0:80 failed' }],
+          startProcess: { user: 'root', cpu: 0, mem: 0.3, vsz: 55000, rss: 9000, stat: 'Ss', start: '14:30', time: '0:00', command: 'nginx: master process' },
+          listen: [{ proto: 'tcp', local: '0.0.0.0:80' }],
+        },
+      ],
+      processes: [{ pid: 2211, user: 'alibek', cpu: 0.5, mem: 1, vsz: 1000, rss: 1000, stat: 'S', start: '13:00', time: '0:01', command: 'python3 -m http.server 80' }],
+      listeners: [{ proto: 'tcp', local: '0.0.0.0:80', pid: 2211, process: 'python3' }],
+    });
+
+  it('systemctl needs root, restart fails while port is busy', () => {
+    const sh = svcShell();
+    expect(sh.run('systemctl restart nginx').stderr).toContain('Access denied');
+    expect(sh.run('sudo systemctl restart nginx').exitCode).toBe(1);
+    expect(sh.run('journalctl -u nginx -n 3').stdout).toContain('Address already in use');
+    expect(sh.run('ss -tulpn').stdout).toContain('python3');
+    expect(sh.run('kill 2211').exitCode).toBe(0);
+    expect(sh.run('sudo systemctl restart nginx').exitCode).toBe(0);
+    expect(sh.run('systemctl is-active nginx').stdout).toBe('active\n');
+  });
+
+  it('journalctl filters by priority', () => {
+    const sh = svcShell();
+    expect(sh.run('journalctl -u nginx -p err').stdout).toContain('bind()');
+    expect(sh.run('journalctl -u nginx -p err | grep -c bind').stdout).toBe('1\n');
+  });
+
+  it('dig NXDOMAIN and curl codes', () => {
+    const sh = new Shell({
+      network: { hosts: { 'api.shop.kz': { ip: '10.0.2.5' } }, http: { 'https://api.shop.kz/health': { status: 503, body: 'down' } } },
+    });
+    expect(sh.run('dig nope.shop.kz').stdout).toContain('NXDOMAIN');
+    expect(sh.run('dig +short api.shop.kz').stdout).toBe('10.0.2.5\n');
+    expect(sh.run('curl -s -o /dev/null -w "%{http_code}" https://api.shop.kz/health').stdout).toBe('503');
+    expect(sh.run('curl -I https://api.shop.kz/health').stdout).toContain('HTTP/1.1 503');
+    expect(sh.run('curl http://nope.local').exitCode).toBe(6);
+  });
+
+  it('df and free', () => {
+    const sh = new Shell({ resources: { disks: [{ fs: '/dev/sda1', sizeGb: 50, usedGb: 50, mount: '/' }] } });
+    expect(sh.run('df -h').stdout).toContain('100%');
+    expect(sh.run('free -h').stdout).toContain('available');
+  });
+});
