@@ -1,6 +1,8 @@
 import type { Plugin, Connect } from 'vite';
-import { spawn } from 'node:child_process';
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import { tmpdir } from 'node:os';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { delimiter, join } from 'node:path';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { MENTOR_SYSTEM, buildPrompt, validateRequest } from './mentor-prompt';
 
@@ -18,11 +20,38 @@ import { MENTOR_SYSTEM, buildPrompt, validateRequest } from './mentor-prompt';
 const BIN = process.env.MENTOR_CLAUDE_BIN || 'claude';
 let statusCache: { available: boolean; detail: string; at: number } | null = null;
 
+/**
+ * Найти claude. На Windows установка через npm даёт claude.cmd, а Node не запускает .cmd без оболочки —
+ * поэтому ищем claude.exe (нативный установщик) или запускаем .cmd через cmd.exe с экранированием.
+ */
+function resolveBin(): { path: string; shell: boolean } {
+  if (process.platform !== 'win32') return { path: BIN, shell: false };
+  if (/[\\/]/.test(BIN) || /\.(exe|cmd|bat)$/i.test(BIN)) return { path: BIN, shell: /\.(cmd|bat)$/i.test(BIN) };
+  const dirs = (process.env.PATH ?? '').split(delimiter).filter(Boolean);
+  for (const ext of ['.exe', '.cmd', '.bat']) {
+    for (const d of dirs) {
+      const full = join(d, BIN + ext);
+      if (existsSync(full)) return { path: full, shell: ext !== '.exe' };
+    }
+  }
+  return { path: BIN, shell: false };
+}
+
+/** Аргумент для командной строки cmd.exe */
+const winQuote = (a: string) => (a === '' ? '""' : /[\s"&|<>^%()]/.test(a) ? `"${a.replace(/"/g, '""')}"` : a);
+
+function spawnClaude(args: string[], opts: { cwd?: string; env?: NodeJS.ProcessEnv } = {}): ChildProcessWithoutNullStreams {
+  const bin = resolveBin();
+  if (bin.shell) return spawn(winQuote(bin.path), args.map(winQuote), { ...opts, shell: true, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+  return spawn(bin.path, args, { ...opts, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+}
+
 function checkCli(): Promise<{ available: boolean; detail: string }> {
   if (process.env.MENTOR_DISABLED === '1') return Promise.resolve({ available: false, detail: 'MENTOR_DISABLED=1' });
   if (statusCache && Date.now() - statusCache.at < 60_000) return Promise.resolve(statusCache);
   return new Promise((resolve) => {
-    const p = spawn(BIN, ['--version'], { stdio: ['ignore', 'pipe', 'pipe'] });
+    const p = spawnClaude(['--version']);
+    p.stdin.end();
     let out = '';
     const timer = setTimeout(() => p.kill(), 8000);
     p.stdout.on('data', (d) => (out += d));
@@ -63,19 +92,30 @@ async function handleAsk(req: IncomingMessage, res: ServerResponse) {
     res.end(`bad request: ${(e as Error).message}`);
     return;
   }
+  // системный промпт — файлом: длинный многострочный текст нельзя надёжно передать через cmd.exe на Windows
+  const promptDir = mkdtempSync(join(tmpdir(), 'l3-mentor-'));
+  const promptFile = join(promptDir, 'system.txt');
+  writeFileSync(promptFile, MENTOR_SYSTEM, 'utf8');
   const args = [
     '-p',
     '--output-format', 'stream-json',
     '--verbose',
     '--include-partial-messages',
-    '--system-prompt', MENTOR_SYSTEM,
+    '--system-prompt-file', promptFile,
     '--tools', '',
     '--strict-mcp-config',
     '--no-session-persistence',
   ];
   if (process.env.MENTOR_MODEL) args.push('--model', process.env.MENTOR_MODEL);
   // cwd = временный каталог: CLAUDE.md проекта не подмешивается в ответы ментора
-  const child = spawn(BIN, args, { cwd: tmpdir(), stdio: ['pipe', 'pipe', 'pipe'], env: { ...process.env } });
+  const child = spawnClaude(args, { cwd: promptDir, env: { ...process.env } });
+  const cleanup = () => {
+    try {
+      rmSync(promptDir, { recursive: true, force: true });
+    } catch {
+      /* файл ещё занят — не страшно, это временный каталог */
+    }
+  };
   res.setHeader('Content-Type', 'text/plain; charset=utf-8');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('X-Accel-Buffering', 'no');
@@ -112,11 +152,13 @@ async function handleAsk(req: IncomingMessage, res: ServerResponse) {
   child.stderr.on('data', (d) => (stderr += d));
   child.on('error', (e) => {
     clearTimeout(killTimer);
+    cleanup();
     if (!res.headersSent) res.statusCode = 503;
     res.end(`Не удалось запустить Claude Code CLI (${e.message}).`);
   });
   child.on('close', (code) => {
     clearTimeout(killTimer);
+    cleanup();
     if (!streamed && finalText) res.write(finalText);
     if (!streamed && !finalText) {
       if (!res.headersSent) res.statusCode = 502;
