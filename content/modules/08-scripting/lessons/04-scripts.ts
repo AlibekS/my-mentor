@@ -56,7 +56,7 @@ chmod +x ~/errors.sh
           return a.out.trim() === 'OK: nginx' && a.code === 0 && b.out.trim() === 'FAIL: mailer' && b.code === 1;
         },
       },
-      hints: ['Условие: `if systemctl is-active "$1" > /dev/null; then … else … fi`', 'В ветке else: `echo "FAIL: $1"` и `exit 1`.', 'Проверь сам: `./svc.sh mailer; echo $?`'],
+      hints: ['Условие: `if systemctl is-active "$1" > /dev/null; then …; else …; fi` (в одну строку перед `else` и `fi` нужны `;`)', 'В ветке else: `echo "FAIL: $1"` и `exit 1`.', 'Проверь сам: `./svc.sh mailer; echo $?`'],
       solution: `printf '%s\\n' '#!/usr/bin/env bash' 'if systemctl is-active "$1" > /dev/null; then' '  echo "OK: $1"' 'else' '  echo "FAIL: $1"' '  exit 1' 'fi' > ~/svc.sh
 chmod +x ~/svc.sh`,
       explanation: '```bash\n#!/usr/bin/env bash\nif systemctl is-active "$1" > /dev/null; then\n  echo "OK: $1"\nelse\n  echo "FAIL: $1"\n  exit 1\nfi\n```',

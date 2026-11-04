@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { lessonByKey, moduleById } from '../content';
-import { taskTool, type Question, type Task, type Tool } from '../content/types';
+import { taskTool, type Lesson, type Question, type Task, type Tool } from '../content/types';
+import { shellForTask } from '../engine/replay';
 import { evaluate } from '../engine/checks';
 import { checkAnswer } from '../engine/normalize';
 import { completeReview, recordCommand } from '../game/actions';
@@ -55,7 +56,7 @@ export function Review() {
           {item.kind === 'question' ? (
             <ReviewQuestion key={item.key} q={lesson.quiz.find((x) => x.id === item.itemId)} dataset={lesson.sql?.dataset} obs={lesson.obs} onDone={finish} />
           ) : (
-            <ReviewTask key={item.key} task={lesson.tasks.find((t) => t.id === item.itemId)} scenario={lesson.scenario} dataset={lesson.sql?.dataset} obs={lesson.obs} tool={lesson.tasks.find((t) => t.id === item.itemId) ? taskTool(lesson, lesson.tasks.find((t) => t.id === item.itemId)!) : 'terminal'} moduleId={lesson.moduleId} onDone={finish} />
+            <ReviewTask key={item.key} task={lesson.tasks.find((t) => t.id === item.itemId)} lesson={lesson} dataset={lesson.sql?.dataset} obs={lesson.obs} tool={lesson.tasks.find((t) => t.id === item.itemId) ? taskTool(lesson, lesson.tasks.find((t) => t.id === item.itemId)!) : 'terminal'} moduleId={lesson.moduleId} onDone={finish} />
           )}
         </div>
       )}
@@ -69,9 +70,10 @@ function ReviewQuestion({ q, onDone, dataset, obs }: { q?: Question; onDone: (ok
   return <QuestionCard q={q} dataset={dataset} obs={obs} maxAttempts={1} onAttempt={(r) => setOk(r)} onNext={() => onDone(ok)} />;
 }
 
-function ReviewTask({ task, scenario, moduleId, onDone, dataset, obs, tool }: { task?: Task; scenario: object; moduleId: string; onDone: (ok: boolean) => void; dataset?: string; obs?: ObsDataset; tool: Tool }) {
+function ReviewTask({ task, lesson, moduleId, onDone, dataset, obs, tool }: { task?: Task; lesson: Lesson; moduleId: string; onDone: (ok: boolean) => void; dataset?: string; obs?: ObsDataset; tool: Tool }) {
   const { update } = useStore();
-  const shell = useMemo(() => new Shell(task?.scenario ?? scenario), [task, scenario]);
+  // задание из общего окружения урока: сначала применяем предыдущие шаги (иначе, например, «перезапусти сервис» не пройдёт)
+  const { shell, replayed } = useMemo(() => (task ? shellForTask(lesson, task) : { shell: new Shell(lesson.scenario), replayed: [] as number[] }), [task, lesson]);
   const [solved, setSolved] = useState(false);
   const [ans, setAns] = useState('');
   const [showSol, setShowSol] = useState(false);
@@ -118,6 +120,7 @@ function ReviewTask({ task, scenario, moduleId, onDone, dataset, obs, tool }: { 
       <div className="term-box">
         <Terminal
           shell={shell}
+          banner={replayed.length ? `\x1b[2mПредыдущие шаги урока (${replayed.join(', ')}) уже выполнены.\x1b[0m` : undefined}
           onExec={(rec) => {
             update((p) => recordCommand(p, rec, moduleId));
             if (task.check && !task.answer && evaluate(task.check, shell, rec)) setSolved(true);

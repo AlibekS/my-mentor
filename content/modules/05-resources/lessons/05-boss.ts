@@ -90,7 +90,8 @@ const lesson: LessonDef = {
     {
       id: 'restart',
       prompt: 'Перезапусти `orders-api`, чтобы он отпустил удалённый `debug.log`, и убедись, что `/` занят меньше чем на 70%.',
-      check: { type: 'custom', fn: (sh) => sh.state.deletedOpen.length === 0 && sh.state.services.find((s) => s.name === 'orders-api')?.active === 'active' },
+      // старый процесс 31900 должен завершиться (иначе задание засчитывалось бы сразу, ещё до rm)
+      check: { type: 'custom', fn: (sh) => !sh.state.processes.some((p) => p.pid === 31900) && sh.state.deletedOpen.length === 0 && sh.state.services.find((s) => s.name === 'orders-api')?.active === 'active' },
       hints: ['`sudo systemctl restart orders-api`', 'Потом `df -h`.'],
       solution: 'sudo systemctl restart orders-api\ndf -h',
       tags: ['systemctl'],

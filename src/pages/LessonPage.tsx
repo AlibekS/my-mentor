@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { lessonByKey, moduleById } from '../content';
 import { lessonTools, taskTool, type Lesson, type Module, type Task, type Tool } from '../content/types';
+import { shellForTask } from '../engine/replay';
 import { evaluate } from '../engine/checks';
 import { checkAnswer } from '../engine/normalize';
 import { answerQuestion, completeLesson, ensureLesson, giveUpQuestion, recordCommand, showSolution, solveTask, useHint } from '../game/actions';
@@ -206,7 +207,12 @@ function PracticeStep({ module, lesson, base }: { module: Module; lesson: Lesson
   const tp = lp?.tasks[task?.id ?? ''];
   // задания без своего сценария делят одно окружение урока (как на реальном сервере)
   const envKey = task?.scenario ? task.id : 'lesson';
-  const shell = useMemo(() => new Shell(task?.scenario ?? lesson.scenario), [envKey, lesson, resetN]); // eslint-disable-line react-hooks/exhaustive-deps
+  // окружение создаётся заново (перезагрузка страницы, возврат из теста, «Сбросить окружение») —
+  // восстанавливаем состояние на начало задания: применяем решения уже решённых предыдущих заданий
+  const { shell, replayed } = useMemo(
+    () => (task ? shellForTask(lesson, task, (t) => !!lp?.tasks[t.id]?.solved) : { shell: new Shell(lesson.scenario), replayed: [] as number[] }),
+    [envKey, lesson, resetN], // eslint-disable-line react-hooks/exhaustive-deps
+  );
   const [answer, setAnswer] = useState('');
   const [answerState, setAnswerState] = useState<'idle' | 'bad'>('idle');
   const termLog = useRef<ExecRecord[]>([]);
@@ -384,7 +390,7 @@ function PracticeStep({ module, lesson, base }: { module: Module; lesson: Lesson
           <ToolPanes
             lesson={lesson}
             active={taskTool(lesson, task)}
-            terminal={<Terminal key={`${envKey}-${resetN}`} shell={shell} onExec={onExec} autoFocus banner={`\x1b[2m${lesson.kind === 'boss' ? 'Инцидент в процессе — действуй как L3.' : 'Окружение урока.'} help — список команд, man <команда> — справка.\x1b[0m`} />}
+            terminal={<Terminal key={`${envKey}-${resetN}`} shell={shell} onExec={onExec} autoFocus banner={`\x1b[2m${lesson.kind === 'boss' ? 'Инцидент в процессе — действуй как L3.' : 'Окружение урока.'} help — список команд, man <команда> — справка.\x1b[0m${replayed.length ? `\r\n\x1b[2mОкружение восстановлено: уже применены решения ${replayed.length === 1 ? 'задания' : 'заданий'} ${replayed.join(', ')}.\x1b[0m` : ''}`} />}
             sql={lesson.sql && <SqlConsole dataset={lesson.sql.dataset} onRun={onSql} resetKey={resetN} />}
             obs={lesson.obs && <ObsConsole key={resetN} ds={lesson.obs} onQuery={onObs} />}
           />

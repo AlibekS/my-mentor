@@ -14,6 +14,13 @@ describe('answers', () => {
     expect(checkAnswer('закончилось место на диске', { accept: [], normalize: 'keywords', keywords: [['диск', 'disk'], ['мест', 'space', 'заполн']] })).toBe(true);
     expect(checkAnswer('', { accept: [''] })).toBe(false);
   });
+  it('accepts a flag written together with its command', () => {
+    expect(checkAnswer('grep -v', { accept: ['-v'] })).toBe(true);
+    expect(checkAnswer('sudo journalctl -f', { accept: ['-f'] })).toBe(true);
+    expect(checkAnswer('grep -A 5', { accept: ['-A 5'], normalize: 'exact' })).toBe(true);
+    expect(checkAnswer('grep -c', { accept: ['-v'] })).toBe(false);
+    expect(checkAnswer('nginx restart', { accept: ['restart'] })).toBe(false);
+  });
 });
 
 describe('checks', () => {
