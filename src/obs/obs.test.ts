@@ -45,6 +45,11 @@ describe('promql', () => {
     expect(evalQuery('sum(', ds).ok).toBe(false);
     expect(sameResult(evalQuery('sum(rate(http_requests_total[5m])) by (service)', ds), evalQuery('sum by (service) (rate(http_requests_total[5m]))', ds)).ok).toBe(true);
     expect(sameResult(evalQuery('sum(rate(http_requests_total[5m]))', ds), evalQuery('sum by (service) (rate(http_requests_total[5m]))', ds)).ok).toBe(false);
+    // постоянная метка из селектора не мешает сравнению; ключевые слова без учёта регистра
+    expect(sameResult(evalQuery('rate(http_requests_total{service="web"}[5m])', ds), evalQuery('sum(rate(http_requests_total{service="web"}[5m]))', ds)).ok).toBe(true);
+    expect(sameResult(evalQuery('SUM BY (service) (rate(http_requests_total[5m]))', ds), evalQuery('sum by (service) (rate(http_requests_total[5m]))', ds)).ok).toBe(true);
+    expect(evalQuery('rate(http_requests_total{code="500"}[5m]) / on(service) group_left sum by (service) (rate(http_requests_total[5m]))', ds).ok).toBe(true);
+    expect(evalQuery('predict_linear(mem_bytes[5m], 3600)', ds).error).toContain('не поддерживается');
   });
 });
 
@@ -58,6 +63,10 @@ describe('kql', () => {
   it('fields, phrases, boolean ops', () => {
     expect(searchLogs(logs, 'service:checkout AND level:error').hits).toHaveLength(1);
     expect(searchLogs(logs, 'level:error timeout').hits).toHaveLength(2);
+    expect(searchLogs(logs, 'service:checkout AND msg:"db timeout after"').hits).toHaveLength(1);
+    expect(searchLogs(logs, 'latency_ms > 500').hits).toHaveLength(1);
+    expect(searchLogs(logs, 'service:(checkout OR payments) and level:error').hits).toHaveLength(2);
+    expect(searchLogs(logs, 't1').hits).toHaveLength(1);
     expect(searchLogs(logs, 'service:pay* AND NOT level:error').hits).toHaveLength(1);
     expect(searchLogs(logs, '"order created" OR trace_id:t1').hits).toHaveLength(2);
     expect(searchLogs(logs, 'latency_ms>500').hits).toHaveLength(1);

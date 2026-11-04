@@ -113,6 +113,12 @@ function parse(src: string): Node {
         eat();
         ignoring = labelList();
       }
+      // group_left / group_right (опционально со списком меток): сопоставление «многие к одному»
+      // в тренажёре и так выполняется автоматически — модификатор принимаем как есть
+      if (peek() === 'group_left' || peek() === 'group_right') {
+        eat();
+        if (peek() === '(') labelList();
+      }
       const r = next();
       l = { t: 'bin', op, l, r, bool, on, ignoring };
     }

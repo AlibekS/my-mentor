@@ -470,4 +470,49 @@ const w: CommandDef = {
   },
 };
 
-export default [diff, nl, groups, ll, host, getent, lscpu, w, xargs, tac, seq, basename, dirname, stat, egrep, fgrep, zcat, zgrep, zless, timeout, nc, service, printenv, flock, paste];
+const getconf: CommandDef = {
+  name: 'getconf',
+  summary: 'системные параметры: getconf _NPROCESSORS_ONLN — число CPU',
+  run: (args, _s, ctx) => {
+    const k = args[0] ?? '';
+    if (/NPROCESSORS/.test(k)) return ok(`${ctx.state.resources.cpus ?? 2}\n`);
+    if (k === 'PAGESIZE' || k === 'PAGE_SIZE') return ok('4096\n');
+    if (k === 'LONG_BIT') return ok('64\n');
+    return fail(`getconf: Unrecognized variable '${k}'`);
+  },
+};
+
+/** nginx -t (проверка конфига), nginx -s reload|reopen|stop|quit (сигнал мастер-процессу), nginx -v */
+const nginx: CommandDef = {
+  name: 'nginx',
+  summary: 'веб-сервер: nginx -t — проверить конфиг, nginx -s reload — перечитать конфиг (SIGHUP мастеру), nginx -v — версия',
+  usage: 'nginx -t | nginx -s reload|reopen|stop|quit | nginx -v',
+  run(args, _s, ctx) {
+    if (args.includes('-v') || args.includes('-V')) return { stdout: '', stderr: 'nginx version: nginx/1.24.0 (Ubuntu)\n', exitCode: 0 };
+    const master = ctx.state.processes.find((p) => /nginx: master/.test(p.command));
+    if (args.includes('-t') || args.includes('-T')) {
+      if (ctx.user !== 'root') return fail('nginx: [alert] could not open error log file: open() "/var/log/nginx/error.log" failed (13: Permission denied)\nnginx: configuration file /etc/nginx/nginx.conf test failed\n(Подсказка тренажёра: sudo nginx -t)');
+      const conf = ctx.fs.lookup('/etc/nginx/nginx.conf');
+      const svc = ctx.state.services.find((x) => x.name === 'nginx');
+      const bad = svc?.requires?.find((r) => {
+        const n = ctx.fs.lookup(r.path);
+        return !n || (r.contains !== undefined && !n.content.includes(r.contains)) || (r.notContains !== undefined && n.content.includes(r.notContains));
+      });
+      if (bad) return fail(`${bad.error}\nnginx: configuration file /etc/nginx/nginx.conf test failed`);
+      void conf;
+      return { stdout: '', stderr: 'nginx: the configuration file /etc/nginx/nginx.conf syntax is ok\nnginx: configuration file /etc/nginx/nginx.conf test is successful\n', exitCode: 0 };
+    }
+    const si = args.indexOf('-s');
+    if (si >= 0) {
+      const sig = args[si + 1];
+      if (!master) return fail('nginx: [error] invalid PID number "" in "/run/nginx.pid"');
+      if (ctx.user !== 'root') return fail('nginx: [alert] kill(' + master.pid + ', 1) failed (1: Operation not permitted)');
+      const map: Record<string, string> = { reload: '-HUP', reopen: '-USR1', stop: '-TERM', quit: '-QUIT' };
+      if (!map[sig]) return fail(`nginx: invalid option: "-s ${sig ?? ''}"`);
+      return ctx.exec(['kill', map[sig], String(master.pid)], '');
+    }
+    return fail('nginx: в тренажёре — nginx -t, nginx -s reload, nginx -v (сам сервер запускает systemctl start nginx)');
+  },
+};
+
+export default [getconf, nginx, diff, nl, groups, ll, host, getent, lscpu, w, xargs, tac, seq, basename, dirname, stat, egrep, fgrep, zcat, zgrep, zless, timeout, nc, service, printenv, flock, paste];

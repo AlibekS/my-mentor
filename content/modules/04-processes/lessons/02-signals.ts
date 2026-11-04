@@ -41,12 +41,12 @@ const lesson: LessonDef = {
         fn: (sh, last) => {
           if (!last || last.exitCode !== 0 || !sh.state.processes.some((p) => p.pid === 1101)) return false;
           const hup = /\bkill\s+(-s\s+|-n\s+)?-?(SIG)?(HUP|1)(\s|$)/i.test(last.line) && /\b1101\b|pgrep|pidof|nginx\.pid/.test(last.line);
-          return hup || /\bsystemctl\s+reload\s+nginx\b/.test(last.line);
+          return hup || /\bsystemctl\s+reload\s+nginx\b|\bnginx\s+-s\s+reload\b/.test(last.line);
         },
       },
       hints: ['Мастер-процесс nginx — PID 1101 (`pgrep -a nginx`).', 'Сигнал «перечитать конфиг» — HUP.', '`sudo kill -HUP 1101`'],
       solution: 'sudo kill -HUP 1101',
-      explanation: 'На практике чаще пишут `sudo systemctl reload nginx` или `nginx -s reload` — под капотом это тот же SIGHUP.',
+      explanation: 'На практике чаще пишут `sudo systemctl reload nginx` или `sudo nginx -s reload` (оба засчитываются и здесь) — под капотом это тот же SIGHUP мастер-процессу.',
       tags: ['kill'],
     },
   ],

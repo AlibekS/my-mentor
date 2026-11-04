@@ -21,6 +21,8 @@ describe('answers', () => {
     expect(checkAnswer('2,5%', { accept: ['2.5'], normalize: 'number' })).toBe(true);
     expect(checkAnswer('-3', { accept: ['-3'], normalize: 'number' })).toBe(true);
     expect(checkAnswer('примерно 25 ГБ', { accept: ['25'], normalize: 'number' })).toBe(true);
+    expect(checkAnswer('14:41-14:04=37', { accept: ['37'], normalize: 'number' })).toBe(true);
+    expect(checkAnswer('docker ps -a', { accept: ['-a'] })).toBe(true);
   });
   it('accepts a flag written together with its command', () => {
     expect(checkAnswer('grep -v', { accept: ['-v'] })).toBe(true);

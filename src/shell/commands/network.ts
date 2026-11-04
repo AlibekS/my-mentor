@@ -42,15 +42,16 @@ const ip: CommandDef = {
     const sub = rest[0] ?? '';
     const devIdx = rest.findIndex((a) => a === 'dev' || a === 'show');
     const dev = devIdx >= 0 ? rest.slice(devIdx + 1).find((a) => a !== 'dev') : undefined;
-    const ifs = ctx.state.network.interfaces.filter((i) => !dev || i.name === dev);
+    const all = ctx.state.network.interfaces;
+    const ifs = all.filter((i) => !dev || i.name === dev);
     if (dev && !ifs.length) return fail(`Device "${dev}" does not exist.`);
     if (/^(a|addr|address)$/.test(sub)) {
       if (brief) return ok(joinLines(ifs.map((i) => `${i.name.padEnd(16)} ${(i.name === 'lo' ? 'UNKNOWN' : i.state).padEnd(14)} ${i.ip}`)));
       return ok(
         ifs
           .map(
-            (i, k) =>
-              `${k + 1}: ${i.name}: <${i.name === 'lo' ? 'LOOPBACK' : 'BROADCAST,MULTICAST'},${i.state === 'UP' ? 'UP,LOWER_UP' : ''}> mtu ${i.name === 'lo' ? 65536 : 1500} state ${i.name === 'lo' ? 'UNKNOWN' : i.state}\n` +
+            (i) =>
+              `${all.indexOf(i) + 1}: ${i.name}: <${i.name === 'lo' ? 'LOOPBACK' : 'BROADCAST,MULTICAST'},${i.state === 'UP' ? 'UP,LOWER_UP' : ''}> mtu ${i.name === 'lo' ? 65536 : 1500} state ${i.name === 'lo' ? 'UNKNOWN' : i.state}\n` +
               `    link/${i.name === 'lo' ? 'loopback 00:00:00:00:00:00' : 'ether ' + (i.mac ?? '02:00:00:00:00:01')}\n` +
               `    inet ${i.ip} scope ${i.name === 'lo' ? 'host' : 'global'} ${i.name}\n`,
           )

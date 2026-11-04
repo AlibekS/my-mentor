@@ -18,6 +18,9 @@ export function parseNumber(s: string): number | null {
   // «0.0.0.0:6379», «127.0.0.1:8081» — ответом считается порт
   const ipPort = /\b\d{1,3}(?:\.\d{1,3}){3}:(\d+)\b/.exec(s);
   if (ipPort) return parseFloat(ipPort[1]);
+  // «14:41-14:04=37», «итого = 37» — ответ после последнего «=»
+  const eq = s.lastIndexOf('=');
+  if (eq >= 0 && /\d/.test(s.slice(eq + 1))) s = s.slice(eq + 1);
   // «1 234» → 1234; число, приклеенное к букве (p95, HTTP2, v1), — часть названия, а не ответ
   const t = s.replace(/(\d)\s+(?=\d{3}(?!\d))/g, '$1');
   const m = /(?<![A-Za-zА-Яа-яЁё_\d.])-?\d+(?:[.,]\d+)?/.exec(t) ?? /-?\d+(?:[.,]\d+)?/.exec(t);
