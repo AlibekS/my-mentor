@@ -60,6 +60,8 @@ export interface HttpEndpoint {
   timeMs?: number;
   /** Ошибка соединения вместо ответа */
   error?: 'refused' | 'timeout' | 'resolve' | 'ssl';
+  /** Ожидаемый заголовок Authorization (например "Bearer abc"); без него — 401, с неверным — 403 */
+  auth?: string;
 }
 
 export interface Host {

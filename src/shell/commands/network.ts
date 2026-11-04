@@ -149,13 +149,21 @@ const curl: CommandDef = {
   run(args, _s, ctx) {
     let url = '';
     let method = 'GET';
+    const headersIn: Record<string, string> = {};
     let writeOut = '';
     let outFile = '';
     const flags = new Set<string>();
     for (let i = 0; i < args.length; i++) {
       const a = args[i];
       if (a === '-X' || a === '--request') method = args[++i];
-      else if (a === '-H' || a === '--header' || a === '-d' || a === '--data' || a === '-u' || a === '-m' || a === '--max-time' || a === '--connect-timeout') i++;
+      else if (a === '-H' || a === '--header') {
+        const h = args[++i] ?? '';
+        const k = h.indexOf(':');
+        if (k > 0) headersIn[h.slice(0, k).trim().toLowerCase()] = h.slice(k + 1).trim();
+      } else if (a === '-d' || a === '--data' || a === '--data-raw') {
+        i++;
+        if (method === 'GET') method = 'POST';
+      } else if (a === '-u' || a === '-m' || a === '--max-time' || a === '--connect-timeout') i++;
       else if (a === '-w' || a === '--write-out') writeOut = args[++i];
       else if (a === '-o' || a === '--output') outFile = args[++i];
       else if (a === '--head') flags.add('I');
@@ -171,7 +179,9 @@ const curl: CommandDef = {
     const host = u.hostname;
     const isHttps = u.protocol === 'https:';
     const port = u.port || (isHttps ? '443' : '80');
-    const key = Object.keys(ctx.state.network.http).find((k) => k === url || k === url.replace(/\/$/, '') || k === `${u.protocol}//${u.host}${u.pathname}`);
+    const bare = `${u.protocol}//${u.host}${u.pathname}`;
+    const cands = [`${method} ${url}`, `${method} ${bare}`, url, url.replace(/\/$/, ''), bare, bare.replace(/\/$/, '')];
+    const key = cands.find((k) => k in ctx.state.network.http);
     let ep: HttpEndpoint | undefined = key ? ctx.state.network.http[key] : undefined;
     const r = host === 'localhost' || host === '127.0.0.1' ? { ip: '127.0.0.1', host: { ip: '127.0.0.1' } } : resolveHost(ctx, host);
     const v = flags.has('v');
@@ -200,11 +210,16 @@ const curl: CommandDef = {
         verbose += `*  SSL certificate verify ok.\n`;
       }
     }
+    if (ep.auth !== undefined) {
+      const got = headersIn['authorization'];
+      if (!got) ep = { status: 401, headers: { 'Content-Type': 'application/json', 'WWW-Authenticate': 'Bearer' }, body: '{"error":"unauthorized","message":"Missing Authorization header"}\n' };
+      else if (got !== ep.auth) ep = { status: 403, headers: { 'Content-Type': 'application/json' }, body: '{"error":"forbidden","message":"Token is invalid or lacks scope"}\n' };
+    }
     const status = ep.status;
     const reason = ep.reason ?? REASONS[status] ?? '';
     const headers = { Server: 'nginx/1.24.0', Date: 'Wed, 04 Nov 2026 09:30:00 GMT', 'Content-Type': 'text/html; charset=utf-8', ...(ep.headers ?? {}) };
     const headText = `HTTP/1.1 ${status} ${reason}\n` + Object.entries(headers).map(([k, val]) => `${k}: ${val}`).join('\n') + '\n\n';
-    verbose += `> ${flags.has('I') ? 'HEAD' : method} ${u.pathname}${u.search} HTTP/1.1\n> Host: ${u.host}\n> User-Agent: curl/8.5.0\n> Accept: */*\n>\n` + headText.split('\n').filter(Boolean).map((l) => '< ' + l).join('\n') + '\n<\n';
+    verbose += `> ${flags.has('I') ? 'HEAD' : method} ${u.pathname}${u.search} HTTP/1.1\n> Host: ${u.host}\n> User-Agent: curl/8.5.0\n> Accept: */*\n${Object.entries(headersIn).map(([k, v]) => `> ${k}: ${k === 'authorization' ? v.replace(/(\S{6})\S+$/, '$1…') : v}\n`).join('')}>\n` + headText.split('\n').filter(Boolean).map((l) => '< ' + l).join('\n') + '\n<\n';
     let stdout = flags.has('I') ? headText : flags.has('i') ? headText + (ep.body ?? '') : ep.body ?? '';
     if (writeOut) stdout += writeOut.replace(/%\{http_code\}/g, String(status)).replace(/%\{time_total\}/g, ((ep.timeMs ?? 42) / 1000).toFixed(6)).replace(/\\n/g, '\n');
     if (outFile) {

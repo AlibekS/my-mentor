@@ -199,3 +199,31 @@ describe('system simulation', () => {
     expect(sh.run('free -h').stdout).toContain('available');
   });
 });
+
+describe('jq and API', () => {
+  const body = JSON.stringify({ items: [{ id: 'o1', status: 'paid', total: 10 }, { id: 'o2', status: 'failed', total: 25 }, { id: 'o3', status: 'failed', total: 5 }], next: null });
+  const sh = () =>
+    new Shell({
+      files: { '/tmp/o.json': body },
+      network: {
+        hosts: { 'api.shop.kz': { ip: '10.0.2.5' } },
+        http: { 'https://api.shop.kz/v1/orders': { status: 200, body, auth: 'Bearer good', headers: { 'Content-Type': 'application/json' } } },
+      },
+    });
+  it('jq filters', () => {
+    const s = sh();
+    expect(s.run("jq '.items | length' /tmp/o.json").stdout).toBe('3\n');
+    expect(s.run(`jq -r '.items[] | select(.status == "failed") | .id' /tmp/o.json`).stdout).toBe('o2\no3\n');
+    expect(s.run("jq -c '.items[0] | {id, total}' /tmp/o.json").stdout).toBe('{"id":"o1","total":10}\n');
+    expect(s.run("jq '.items[] | select(.total > 6 and .status == \"failed\") | .total' /tmp/o.json").stdout).toBe('25\n');
+    expect(s.run("jq -r '.items[-1].id' /tmp/o.json").stdout).toBe('o3\n');
+    expect(s.run("jq '[.items[] | .total] | add' /tmp/o.json").stdout).toBe('40\n');
+    expect(s.run("jq 'keys' /tmp/o.json").stdout).toContain('"items"');
+  });
+  it('curl auth: 401 without token, 403 with wrong, 200 with right', () => {
+    const s = sh();
+    expect(s.run('curl -s -o /dev/null -w "%{http_code}" https://api.shop.kz/v1/orders').stdout).toBe('401');
+    expect(s.run('curl -s -o /dev/null -w "%{http_code}" -H "Authorization: Bearer bad" https://api.shop.kz/v1/orders').stdout).toBe('403');
+    expect(s.run(`curl -s -H "Authorization: Bearer good" https://api.shop.kz/v1/orders | jq -r '.items[1].status'`).stdout).toBe('failed\n');
+  });
+});
