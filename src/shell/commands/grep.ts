@@ -2,6 +2,7 @@ import { fail, type CommandDef } from '../types';
 import { parseArgs, invalidOption, lines, joinLines } from '../args';
 import { abs, readInputs } from '../cmdutil';
 import { FsErr } from '../vfs';
+import { globToRegExp } from '../parser';
 
 /** Перевод базового regex (BRE) в JS: \| \( \) \+ \? → операторы */
 function breToJs(p: string): string {
@@ -29,13 +30,36 @@ function posixClasses(p: string) {
     .replace(/\[:lower:\]/g, 'a-z');
 }
 
+const LONG: Record<string, string> = {
+  'ignore-case': 'i', 'invert-match': 'v', count: 'c', 'line-number': 'n', 'extended-regexp': 'E', 'fixed-strings': 'F',
+  'basic-regexp': 'G', 'perl-regexp': 'P', 'word-regexp': 'w', 'line-regexp': 'x', 'only-matching': 'o', 'files-with-matches': 'l',
+  'files-without-match': 'L', recursive: 'r', 'dereference-recursive': 'R', quiet: 'q', silent: 'q', 'no-messages': 's',
+  'no-filename': 'h', 'with-filename': 'H', 'max-count': 'm', 'after-context': 'A', 'before-context': 'B', context: 'C', regexp: 'e',
+};
+
 const cmd: CommandDef = {
   name: 'grep',
   summary:
     'поиск строк по шаблону. -i без учёта регистра, -n номера строк, -v инвертировать, -c посчитать, -E расширенные regex, -r рекурсивно, -l только имена файлов, -o только совпадение, -w слово целиком, -A/-B/-C N контекст',
   usage: 'grep [-inv cErlowF] [-A N] шаблон [файл...]',
-  run(args, stdin, ctx) {
-    const a = parseArgs(args, ['A', 'B', 'C', 'e', 'm'], ['i', 'n', 'v', 'c', 'E', 'r', 'R', 'l', 'o', 'w', 'F', 'h', 'H', 'q', 's', 'A', 'B', 'C', 'e', 'm', 'color', 'P', 'x']);
+  run(rawArgs, stdin, ctx) {
+    // длинные флаги → короткие (--ignore-case → -i, --max-count=5 → -m 5)
+    const args: string[] = [];
+    let include: RegExp | undefined;
+    let exclude: RegExp | undefined;
+    for (const x of rawArgs) {
+      const m = /^--([a-z-]+)(?:=(.*))?$/s.exec(x);
+      if (m && m[1] in LONG) {
+        args.push('-' + LONG[m[1]]);
+        if (m[2] !== undefined) args.push(m[2]);
+      } else if (m && (m[1] === 'include' || m[1] === 'exclude') && m[2] !== undefined) {
+        const re = globToRegExp(m[2]);
+        if (m[1] === 'include') include = re;
+        else exclude = re;
+      } else if (m && (m[1] === 'line-buffered' || m[1] === 'text' || m[1] === 'color' || m[1] === 'colour')) continue;
+      else args.push(x);
+    }
+    const a = parseArgs(args, ['A', 'B', 'C', 'e', 'm'], ['i', 'n', 'v', 'c', 'E', 'r', 'R', 'l', 'L', 'o', 'w', 'F', 'G', 'h', 'H', 'q', 's', 'a', 'I', 'A', 'B', 'C', 'e', 'm', 'P', 'x']);
     if (a.unknown.length) return fail(invalidOption('grep', a.unknown[0]), 2);
     const pos = [...a.positional];
     const pattern = a.values.e ?? pos.shift();
@@ -71,7 +95,8 @@ const cmd: CommandDef = {
         }
         try {
           ctx.fs.walk(p, (path, node) => {
-            if (node.type === 'file') expanded.push(f === '.' ? path.replace(ctx.cwd === '/' ? '/' : ctx.cwd + '/', '') : f.replace(/\/$/, '') + path.slice(p.length));
+            const base = path.slice(path.lastIndexOf('/') + 1);
+            if (node.type === 'file' && (!include || include.test(base)) && !(exclude && exclude.test(base))) expanded.push(f === '.' ? path.replace(ctx.cwd === '/' ? '/' : ctx.cwd + '/', '') : f.replace(/\/$/, '') + path.slice(p.length));
           });
         } catch (e) {
           if (!(e instanceof FsErr)) throw e;
@@ -104,8 +129,8 @@ const cmd: CommandDef = {
       for (let i = 0; i < l.length && matchIdx.length < max; i++) if (re.test(l[i]) !== invert) matchIdx.push(i);
       if (matchIdx.length) any = true;
       if (a.flags.has('q')) continue;
-      if (a.flags.has('l')) {
-        if (matchIdx.length) out += inp.name + '\n';
+      if (a.flags.has('l') || a.flags.has('L')) {
+        if (!!matchIdx.length !== a.flags.has('L')) out += inp.name + '\n';
         continue;
       }
       if (a.flags.has('c')) {

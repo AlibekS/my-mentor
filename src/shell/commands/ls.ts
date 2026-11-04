@@ -8,7 +8,10 @@ const cmd: CommandDef = {
   summary: 'список файлов. -l подробно, -a со скрытыми, -h размеры в K/M/G, -t по времени, -S по размеру, -r в обратном порядке',
   usage: 'ls [-lahtrS] [путь...]',
   run(args, _s, ctx) {
-    const a = parseArgs(args, [], ['l', 'a', 'h', 't', 'r', 'S', '1', 'A', 'd']);
+    const a = parseArgs(args.map((x) => (x === '-1' ? '--one' : x)), [], ['l', 'a', 'h', 't', 'r', 'S', '1', 'A', 'd', 'i', 'F', 'G', 'one', 'color', 'human-readable', 'all', 'almost-all', 'reverse', 'directory']);
+    for (const [long, short] of [['one', '1'], ['human-readable', 'h'], ['all', 'a'], ['almost-all', 'A'], ['reverse', 'r'], ['directory', 'd']]) if (a.flags.has(long)) a.flags.add(short);
+    // как в настоящем ls: если вывод не в терминал (пайп, файл) — по одному имени в строке
+    if (ctx.tty === false) a.flags.add('1');
     if (a.unknown.length) return fail(invalidOption('ls', a.unknown[0]), 2);
     const long = a.flags.has('l');
     const all = a.flags.has('a') || a.flags.has('A');

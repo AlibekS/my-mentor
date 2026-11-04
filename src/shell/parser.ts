@@ -320,6 +320,8 @@ export function splitList(line: string): { text: string; op: ListItem['op'] }[] 
       cur += c + line[++i];
       continue;
     }
+    // комментарий до конца строки: «ip r  # маршруты; шлюз» — «;» внутри комментария не разделяет команды
+    if (c === '#' && (cur === '' || /\s$/.test(cur))) break;
     if (c === '$' && line[i + 1] === '(') {
       const end = matchParen(line, i + 2);
       if (end < 0) {

@@ -386,4 +386,86 @@ describe('containers', () => {
     expect(s.run('sudo docker logs --tail 1 api').stdout).toBe('heap growing\n');
     expect(s.run('sudo docker image prune -f').stdout).toContain('900MB');
   });
+  it('comments end the command line even after ;', () => {
+    const s = new Shell();
+    expect(s.run('echo hi # маршруты; echo bye').stdout).toBe('hi\n');
+    expect(s.run('echo "a # b"; echo c').stdout).toBe('a # b\nc\n');
+  });
+  it('ls prints one name per line into pipes and files (like isatty)', () => {
+    const s = new Shell({ files: { '/data/a': 'x', '/data/b': 'y', '/data/c': 'z' } });
+    expect(s.run('ls /data').stdout).toBe('a  b  c\n');
+    expect(s.run('ls /data | wc -l').stdout.trim()).toBe('3');
+    expect(s.run('ls -1 /data').stdout).toBe('a\nb\nc\n');
+    s.run('ls /data > /tmp/list');
+    expect(s.run('cat /tmp/list').stdout).toBe('a\nb\nc\n');
+  });
+  it('sudo works with shell builtins, scripts and -u', () => {
+    const s = new Shell({ files: { '/etc/app.conf': 'a=1\n', '/home/alibek/x.sh': { content: 'echo "$1 $(whoami)"\n', mode: 0o755, owner: 'alibek' } } });
+    expect(s.run('nano /etc/app.conf').stderr).toContain('Permission denied');
+    expect(s.run('sudo nano /etc/app.conf').editFile).toBe('/etc/app.conf');
+    expect(s.run('sudo ./x.sh a').stdout).toBe('a root\n');
+    expect(s.run('sudo bash x.sh b').stdout).toBe('b root\n');
+    s.run('sudo sh -c "echo b=2 >> /etc/app.conf"');
+    expect(s.run('cat /etc/app.conf').stdout).toBe('a=1\nb=2\n');
+    expect(s.run('sudo -u postgres whoami').stdout).toBe('postgres\n');
+    expect(s.run('whoami').stdout).toBe('alibek\n');
+    expect(s.run('sudo -u postgres whoami').stdout).toBe('postgres\n');
+    expect(s.log[s.log.length - 1].commands).toEqual(['whoami']);
+  });
+  it('VAR=value command and sudo !!', () => {
+    const s = new Shell();
+    expect(s.run('GREETING=hi printenv GREETING').stdout).toBe('hi\n');
+    expect(s.run('echo "[$GREETING]"').stdout).toBe('[]\n');
+    s.run('cat /etc/shadow');
+    const r = s.run('sudo !!');
+    expect(r.exitCode).toBe(0);
+    expect(r.output.startsWith('sudo cat /etc/shadow\n')).toBe(true);
+  });
+  it('ps -o / -p / -u / --sort and signals by name', () => {
+    const s = new Shell({
+      processes: [
+        { pid: 10, user: 'shop', cpu: 5, mem: 30, vsz: 1, rss: 900, stat: 'Sl', start: '09:00', time: '1:00', command: '/usr/bin/java -jar shop.jar', service: 'shop' },
+        { pid: 11, user: 'root', cpu: 50, mem: 1, vsz: 1, rss: 10, stat: 'R', start: '09:00', time: '9:00', command: 'python3 /opt/rebuild_index.py' },
+        { pid: 12, user: 'root', cpu: 1, mem: 2, vsz: 1, rss: 20, stat: 'D', start: '09:00', time: '0:01', command: 'tar czf /backup.tgz /data' },
+      ],
+      services: [{ name: 'shop', description: 'Shop', active: 'active', enabled: true, mainPid: 10, logs: [] }],
+    });
+    expect(s.run('ps -eo pid,%cpu,comm --sort=-%cpu').stdout.split('\n')[1].trim()).toMatch(/^11\s+50\.0\s+python3$/);
+    expect(s.run('ps aux --sort -%mem').stdout.split('\n')[1]).toContain(' 10 ');
+    expect(s.run('ps -p 10 -o pid,user,cmd').stdout).toContain('/usr/bin/java -jar shop.jar');
+    expect(s.run('ps -u shop').stdout).not.toContain('python3');
+    expect(s.run('pgrep -f rebuild').stdout).toBe('11\n');
+    expect(s.run('pgrep -l java').stdout).toBe('10 java\n');
+    expect(s.run('sudo kill -0 11').exitCode).toBe(0);
+    expect(s.run('pgrep -c python3').stdout).toBe('1\n');
+    expect(s.run('sudo kill -SIGKILL 12').exitCode).toBe(0); // D-состояние: только SIGKILL
+    expect(s.run('pgrep tar').exitCode).toBe(1);
+    expect(s.run('sudo pkill -f rebuild_index').exitCode).toBe(0);
+    expect(s.run('pgrep python3').exitCode).toBe(1);
+    expect(s.run('sudo killall -s KILL java').exitCode).toBe(0);
+    expect(s.state.services[0].active).toBe('failed');
+    expect(s.run('kill -s FOO 1').stderr).toContain('invalid signal');
+  });
+  it('xargs, seq, tac, basename, stat, service, nc, timeout', () => {
+    const s = new Shell({
+      files: { '/var/log/app/a.log': 'l1\nl2\n', '/var/log/app/b.log': 'l3\n' },
+      listeners: [{ proto: 'tcp', local: '0.0.0.0:80', pid: 1, process: 'nginx' }],
+      services: [{ name: 'nginx', description: 'nginx', active: 'inactive', enabled: true, logs: [] }],
+    });
+    expect(s.run('find /var/log/app -name "*.log" | xargs cat | wc -l').stdout.trim()).toBe('3');
+    expect(s.run('for i in $(seq 1 3); do echo n$i; done').stdout).toBe('n1\nn2\nn3\n');
+    expect(s.run('tac /var/log/app/a.log').stdout).toBe('l2\nl1\n');
+    expect(s.run('basename /var/log/app/a.log .log').stdout).toBe('a\n');
+    expect(s.run('dirname /var/log/app/a.log').stdout).toBe('/var/log/app\n');
+    expect(s.run('stat -c "%a %U %s" /var/log/app/a.log').stdout).toBe('644 root 6\n');
+    expect(s.run('service nginx start').stderr).toContain('Access denied');
+    s.run('sudo service nginx start');
+    expect(s.state.services[0].active).toBe('active');
+    expect(s.run('nc -z localhost 80').exitCode).toBe(0);
+    expect(s.run('nc -z localhost 81').exitCode).toBe(1);
+    expect(s.run('timeout 5 cat /var/log/app/b.log').stdout).toBe('l3\n');
+    expect(s.run('egrep "l1|l3" /var/log/app/a.log /var/log/app/b.log').stdout).toBe('/var/log/app/a.log:l1\n/var/log/app/b.log:l3\n');
+    expect(s.run('grep --ignore-case --count L /var/log/app/a.log').stdout).toBe('2\n');
+    expect(s.run('grep -r --include="b.*" l /var/log/app').stdout).toBe('/var/log/app/b.log:l3\n');
+  });
 });

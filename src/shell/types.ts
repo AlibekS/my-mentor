@@ -178,6 +178,8 @@ export interface CommandContext {
   /** Выполнить вложенную команду (для sudo) */
   exec(argv: string[], stdin: string, asUser?: string): CommandResult;
   registry: Map<string, CommandDef>;
+  /** stdout идёт в терминал (не в пайп/файл/$(...)) — как isatty(1): ls тогда печатает в колонки */
+  tty?: boolean;
 }
 
 export interface CommandDef {

@@ -54,6 +54,9 @@ export class Shell {
   private clearFlag = false;
   private names: string[] = [];
   private maxPipes = 0;
+  /** stdout текущей команды идёт в терминал */
+  private stdoutTty = true;
+  private substDepth = 0;
 
   constructor(scenario: Scenario = {}, registry: Map<string, CommandDef> = defaultRegistry) {
     this.scenario = scenario;
@@ -186,6 +189,7 @@ export class Shell {
       history: this.history,
       exec: (a, s, u) => this.execArgv(a, s, u),
       registry: this.registry,
+      tty: this.stdoutTty,
     };
     try {
       return def.run(args, stdin, ctx);
@@ -267,6 +271,29 @@ export class Shell {
         if (n && !this.fs.can(n, this.state.user, 2)) return { stdout: '', stderr: `${name}: ${args[0]}: Permission denied (нужен sudo)\n`, exitCode: 1 };
         this.pendingEdit = p;
         return this.ok();
+      }
+      case 'sudo': {
+        let i = 0;
+        let asUser = 'root';
+        while (i < args.length && args[i].startsWith('-') && args[i] !== '-i' && args[i] !== '-s') {
+          if (args[i] === '-u') {
+            asUser = args[i + 1] ?? 'root';
+            i += 2;
+          } else if (args[i] === '--') {
+            i++;
+            break;
+          } else i++;
+        }
+        const rest = args.slice(i);
+        // нет команды / sudo -i / sudo su — отдаём обычной команде sudo (она объяснит)
+        if (!rest.length || rest[0] === '-i' || rest[0] === '-s' || rest[0] === 'su') return null;
+        const saved = this.state.user;
+        this.state.user = asUser;
+        try {
+          return this.builtin(rest, stdin) ?? this.execArgv(rest, stdin, asUser);
+        } finally {
+          this.state.user = saved;
+        }
       }
       case 'source':
       case '.': {
@@ -514,6 +541,23 @@ export class Shell {
       // код выхода присваивания = код последней подстановки $(...)
       return { stdout: '', stderr: '', exitCode: this.substCode };
     }
+    const nAssign = words.findIndex((w) => !/^[A-Za-z_][A-Za-z0-9_]*=/.test(w));
+    if (nAssign > 0) {
+      const saved: Record<string, string | undefined> = {};
+      for (const w of words.slice(0, nAssign)) {
+        const k = w.slice(0, w.indexOf('='));
+        if (!(k in saved)) saved[k] = this.env[k];
+        this.env[k] = w.slice(w.indexOf('=') + 1);
+      }
+      try {
+        return this.runSimple({ ...cmd, words: cmd.words.slice(nAssign) }, stdin);
+      } finally {
+        for (const [k, v] of Object.entries(saved)) {
+          if (v === undefined) delete this.env[k];
+          else this.env[k] = v;
+        }
+      }
+    }
     let input = stdin;
     for (const r of cmd.redirects) {
       if (r.type === '<') {
@@ -561,7 +605,13 @@ export class Shell {
   }
 
   private subst(cmd: string): string {
-    const r = this.execLine(cmd);
+    this.substDepth++;
+    let r: Exec;
+    try {
+      r = this.execLine(cmd);
+    } finally {
+      this.substDepth--;
+    }
     this.substCode = r.exitCode;
     return r.stdout;
   }
@@ -606,9 +656,11 @@ export class Shell {
       let pipeCode = 0;
       for (let k = 0; k < cmds.length; k++) {
         const c = cmds[k];
-        if (c.words[0] && this.depth === 0) this.names.push(c.words[0].value === 'sudo' && c.words[1] ? c.words[1].value : c.words[0].value);
+        if (c.words[0] && this.depth === 0) this.names.push(commandName(c.words.map((w) => w.value)));
         if (c.words[0]?.value === 'clear') this.clearFlag = true;
+        this.stdoutTty = k === cmds.length - 1 && this.substDepth === 0 && !c.redirects.some((x) => x.type === '>' || x.type === '>>' || x.type === '&>');
         const r = this.runSimple(c, stdin);
+        this.stdoutTty = true;
         if (r.output !== undefined && cmds.length === 1) acc.output += r.output;
         else acc.output += r.stderr;
         acc.stderr += r.stderr;
@@ -633,8 +685,18 @@ export class Shell {
 
   /** Выполнить строку целиком (то, что ввёл пользователь) */
   run(line: string): RunOutput {
-    const trimmed = line.trim();
+    let trimmed = line.trim();
     if (!trimmed) return { output: '', stdout: '', stderr: '', exitCode: 0 };
+    let echoed = '';
+    if (trimmed.includes('!!') && !/'[^']*!![^']*'/.test(trimmed)) {
+      const prev = this.history[this.history.length - 1];
+      if (!prev) {
+        const msg = 'bash: !!: event not found\n';
+        return { output: msg, stdout: '', stderr: msg, exitCode: 1 };
+      }
+      trimmed = trimmed.split('!!').join(prev);
+      echoed = trimmed + '\n';
+    }
     this.history.push(trimmed);
     this.names = [];
     this.maxPipes = 0;
@@ -672,7 +734,7 @@ export class Shell {
     } else r = this.execLine(trimmed);
     this.env['?'] = String(r.exitCode);
     this.log.push({ line: trimmed, commands: [...this.names], pipes: this.maxPipes, stdout: stripAnsi(r.stdout), stderr: stripAnsi(r.stderr), exitCode: r.exitCode });
-    return { output: r.output, stdout: r.stdout, stderr: r.stderr, exitCode: r.exitCode, clear: this.clearFlag, editFile: this.pendingEdit };
+    return { output: echoed + r.output, stdout: r.stdout, stderr: r.stderr, exitCode: r.exitCode, clear: this.clearFlag, editFile: this.pendingEdit };
   }
 
   /** Варианты для Tab-дополнения */
@@ -700,6 +762,21 @@ export class Shell {
 }
 
 export const stripAnsi = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, '');
+
+/** Имя «настоящей» команды: VAR=x sudo -u postgres psql → psql */
+export function commandName(words: string[]): string {
+  let i = 0;
+  while (i < words.length - 1 && /^[A-Za-z_][A-Za-z0-9_]*=/.test(words[i])) i++;
+  if (words[i] === 'sudo') {
+    i++;
+    while (i < words.length - 1 && words[i].startsWith('-')) i += words[i] === '-u' ? 2 : 1;
+  }
+  if ((words[i] === 'timeout' || words[i] === 'xargs' || words[i] === 'flock') && i < words.length - 1) {
+    i++;
+    while (i < words.length - 1 && (words[i].startsWith('-') || /^\d+[smh]?$/.test(words[i]) || words[i].includes('.lock'))) i++;
+  }
+  return words[i] ?? words[0] ?? '';
+}
 
 function defaultProcesses(user: string) {
   return [
