@@ -15,7 +15,12 @@ export function normCommand(s: string): string {
 }
 
 export function parseNumber(s: string): number | null {
-  const m = /-?\d+(?:[.,]\d+)?/.exec(s.replace(/\s+/g, ''));
+  // «0.0.0.0:6379», «127.0.0.1:8081» — ответом считается порт
+  const ipPort = /\b\d{1,3}(?:\.\d{1,3}){3}:(\d+)\b/.exec(s);
+  if (ipPort) return parseFloat(ipPort[1]);
+  // «1 234» → 1234; число, приклеенное к букве (p95, HTTP2, v1), — часть названия, а не ответ
+  const t = s.replace(/(\d)\s+(?=\d{3}(?!\d))/g, '$1');
+  const m = /(?<![A-Za-zА-Яа-яЁё_\d.])-?\d+(?:[.,]\d+)?/.exec(t) ?? /-?\d+(?:[.,]\d+)?/.exec(t);
   return m ? parseFloat(m[0].replace(',', '.')) : null;
 }
 

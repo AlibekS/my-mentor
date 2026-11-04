@@ -14,6 +14,14 @@ describe('answers', () => {
     expect(checkAnswer('закончилось место на диске', { accept: [], normalize: 'keywords', keywords: [['диск', 'disk'], ['мест', 'space', 'заполн']] })).toBe(true);
     expect(checkAnswer('', { accept: [''] })).toBe(false);
   });
+  it('number answers: skips names like p95, reads ports and thousands', () => {
+    expect(checkAnswer('p95 = 2.3 с', { accept: ['2.3'], normalize: 'number' })).toBe(true);
+    expect(checkAnswer('0.0.0.0:6379', { accept: ['6379'], normalize: 'number' })).toBe(true);
+    expect(checkAnswer('1 234 строки', { accept: ['1234'], normalize: 'number' })).toBe(true);
+    expect(checkAnswer('2,5%', { accept: ['2.5'], normalize: 'number' })).toBe(true);
+    expect(checkAnswer('-3', { accept: ['-3'], normalize: 'number' })).toBe(true);
+    expect(checkAnswer('примерно 25 ГБ', { accept: ['25'], normalize: 'number' })).toBe(true);
+  });
   it('accepts a flag written together with its command', () => {
     expect(checkAnswer('grep -v', { accept: ['-v'] })).toBe(true);
     expect(checkAnswer('sudo journalctl -f', { accept: ['-f'] })).toBe(true);
