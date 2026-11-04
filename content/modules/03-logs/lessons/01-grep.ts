@@ -41,8 +41,8 @@ const lesson: LessonDef = {
     {
       id: 'fatal',
       prompt: 'Найди строку с уровнем **FATAL** и выведи её **с номером строки**.',
-      // номер строки в любом виде: «151:…» (grep -n), «   151\t…» (cat -n | grep), «151 …» (awk NR)
-      check: { type: 'all', checks: [{ type: 'outputMatches', pattern: `(^|\\s)${fatalLine}(:|\\s)` }, { type: 'outputContains', value: 'OutOfMemoryError' }, { type: 'outputLines', value: 1 }] },
+      // номер строки в любом виде: «152:…» (grep -n), «   152\t…» (cat -n | grep), «152 …» (awk NR); но не весь файл целиком
+      check: { type: 'all', checks: [{ type: 'outputMatches', pattern: `(^|\\s)${fatalLine}(:|\\s)` }, { type: 'outputContains', value: 'OutOfMemoryError' }, { type: 'custom', fn: (_sh, last) => !!last && last.stdout.split('\n').filter((l) => l.trim()).length <= 10 }] },
       hints: ['Номера строк — флаг `-n`.'],
       solution: 'grep -n FATAL /var/log/app/app.log',
       tags: ['grep'],

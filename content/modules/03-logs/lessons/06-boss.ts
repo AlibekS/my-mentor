@@ -10,6 +10,8 @@ const access = genAccess({
   override: (e, sec, r) => (sec >= hms(14, 4, 30) && e.path.startsWith('/api/') && r() < 0.85 ? { ...e, status: 502, bytes: 157, rt: 0.001 } : e),
 });
 const n502 = access.filter((e) => e.status === 502).length;
+// столько насчитает неточный `grep -c ' 502 '`: статус 502 ИЛИ размер ответа 502 байта
+const n502loose = access.filter((e) => e.status === 502 || e.bytes === 502).length;
 const first502 = access.find((e) => e.status === 502)!.time;
 const topUrl = (() => {
   const c = new Map<string, number>();
@@ -80,15 +82,18 @@ const lesson: LessonDef = {
       id: 'scale',
       prompt: 'Масштаб: сколько ответов **502** в `/var/log/nginx/access.log`? Выведи число.',
       check: { type: 'outputNumber', value: n502 },
-      hints: ["`awk '$9 == 502' файл | wc -l` или `grep -c '\" 502 '`."],
+      hints: ["`awk '$9 == 502' файл | wc -l` или `grep -c '\" 502 '` — с кавычкой перед статусом.", "Осторожно: `grep -c ' 502 '` (только пробелы) или `grep -w 502` посчитают и ответы размером 502 байта — получится больше, чем на самом деле."],
       solution: "awk '$9 == 502' /var/log/nginx/access.log | wc -l",
+      explanation:
+        `Ответов 502 — ${n502}.` +
+        (n502loose > n502 ? ` Неточный \`grep -c ' 502 '\` дал бы ${n502loose}: он ловит и строки со статусом 200, где размер ответа — 502 байта.` : ''),
       tags: ['awk'],
     },
     {
       id: 'start',
       prompt: 'Когда начались 502? Выведи **время первого** запроса с 502 (поле 4) — одну строку.',
       check: { type: 'all', checks: [{ type: 'outputContains', value: first502 }, { type: 'outputLines', value: 1 }] },
-      hints: ["`awk '$9 == 502 {print $4}' файл | head -1`"],
+      hints: ["`awk '$9 == 502 {print $4}' файл | head -1`", "Если ищешь grep-ом, бери `'\" 502 '` с кавычкой: строка `… 200 502 …` — это статус 200 и 502 байта, а не ошибка."],
       solution: "awk '$9 == 502 {print $4}' /var/log/nginx/access.log | head -1",
       tags: ['awk'],
     },
@@ -111,8 +116,8 @@ const lesson: LessonDef = {
     {
       id: 'root-cause',
       prompt: 'Бэкенд не слушает порт. Проверь сервис `shop-api` и его журнал с 14:00. Какой **параметр конфигурации** сломал релиз? Введи имя параметра.',
-      answer: { accept: ['DB_POOL_SIZE', 'DB_POOL_SIZE=0'], label: 'Параметр:' },
-      hints: ['`systemctl status shop-api`', '`journalctl -u shop-api --since "14:00"` — смотри warning сразу после старта.', 'Сравни `/etc/shop-api/app.env` и `app.env.bak`.'],
+      answer: { accept: [], normalize: 'keywords', keywords: [['db_pool_size']], label: 'Параметр:' },
+      hints: ['`systemctl status shop-api`', '`journalctl -u shop-api --since "14:00"` — смотри warning сразу после старта.', 'Сравни текущий конфиг с резервной копией: `diff /etc/shop-api/app.env /etc/shop-api/app.env.bak`.'],
       solution: 'journalctl -u shop-api --since "14:00"',
       explanation: 'Релиз 2.14.0 убрал значение по умолчанию (см. CHANGELOG), а в `app.env` оказалось `DB_POOL_SIZE=0`: пул БД пустой → таймауты 30 с → health check падает → сервис завершается → nginx получает Connection refused → 502.',
       tags: ['journalctl'],
@@ -131,7 +136,7 @@ const lesson: LessonDef = {
       id: 'q-rca',
       type: 'text',
       prompt: 'RCA одной фразой: что стало первопричиной 502? (проверяются ключевые слова про пул/DB_POOL_SIZE и релиз/конфиг)',
-      answer: { accept: [], normalize: 'keywords', keywords: [['pool', 'пул', 'db_pool_size'], ['релиз', 'release', 'конфиг', 'config', '2.14', 'деплой', 'deploy', 'умолчан', 'default']] },
+      answer: { accept: [], normalize: 'keywords', keywords: [['pool', 'пул', 'db_pool_size'], ['релиз', 'release', 'конфиг', 'config', '2.14', 'депло', 'deploy', 'выкладк', 'умолчан', 'default', 'дефолт']] },
       explanation: 'Например: «Релиз 2.14.0 убрал дефолт DB_POOL_SIZE, в конфиге было 0 → пул соединений к БД пуст, приложение падало по health check, nginx отдавал 502».',
     },
     {
@@ -150,7 +155,7 @@ const lesson: LessonDef = {
       id: 'q-action',
       type: 'text',
       prompt: 'Предложи action item, чтобы такое не повторилось (ключевые слова: проверка/валидация конфига или дефолт или canary/staging).',
-      answer: { accept: [], normalize: 'keywords', keywords: [['валидац', 'провер', 'validate', 'check', 'default', 'дефолт', 'умолчан', 'canary', 'канар', 'staging', 'стейдж', 'тест', 'test', 'smoke']] },
+      answer: { accept: [], normalize: 'keywords', keywords: [['валидац', 'провер', 'validat', 'check', 'default', 'дефолт', 'умолчан', 'canary', 'канар', 'staging', 'стейдж', 'тест', 'test', 'smoke']] },
       explanation: 'Например: валидация конфига при старте с понятной ошибкой, вернуть безопасный дефолт, smoke-тест/canary после релиза, алерт на рост 5xx.',
     },
   ],

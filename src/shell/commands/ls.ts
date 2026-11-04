@@ -8,8 +8,8 @@ const cmd: CommandDef = {
   summary: 'список файлов. -l подробно, -a со скрытыми, -h размеры в K/M/G, -t по времени, -S по размеру, -r в обратном порядке',
   usage: 'ls [-lahtrS] [путь...]',
   run(args, _s, ctx) {
-    const a = parseArgs(args.map((x) => (x === '-1' ? '--one' : x)), [], ['l', 'a', 'h', 't', 'r', 'S', '1', 'A', 'd', 'i', 'F', 'G', 'one', 'color', 'human-readable', 'all', 'almost-all', 'reverse', 'directory']);
-    for (const [long, short] of [['one', '1'], ['human-readable', 'h'], ['all', 'a'], ['almost-all', 'A'], ['reverse', 'r'], ['directory', 'd']]) if (a.flags.has(long)) a.flags.add(short);
+    const a = parseArgs(args.map((x) => (x === '-1' ? '--one' : x)), [], ['l', 'a', 'h', 't', 'r', 'S', '1', 'A', 'd', 'i', 'F', 'G', 'R', 'one', 'color', 'human-readable', 'all', 'almost-all', 'reverse', 'directory', 'recursive']);
+    for (const [long, short] of [['recursive', 'R'], ['one', '1'], ['human-readable', 'h'], ['all', 'a'], ['almost-all', 'A'], ['reverse', 'r'], ['directory', 'd']]) if (a.flags.has(long)) a.flags.add(short);
     // как в настоящем ls: если вывод не в терминал (пайп, файл) — по одному имени в строке
     if (ctx.tty === false) a.flags.add('1');
     if (a.unknown.length) return fail(invalidOption('ls', a.unknown[0]), 2);
@@ -54,15 +54,19 @@ const cmd: CommandDef = {
       else files.push({ n, label: p });
     }
     if (files.length) out += fmt(files);
-    for (const d of dirs) {
+    const recursive = a.flags.has('R');
+    for (let di = 0; di < dirs.length; di++) {
+      const d = dirs[di];
       try {
         let children = ctx.fs.list(d.p, ctx.user).map((n) => ({ n, label: n.name }));
         if (!all) children = children.filter((c) => !c.n.name.startsWith('.'));
-        else if (a.flags.has('a')) {
+        // ls -R: подкаталоги — следом, с заголовком «путь:»
+        if (recursive) dirs.splice(di + 1, 0, ...children.filter((c) => c.n.type === 'dir').map((c) => ({ p: (d.p === '/' ? '' : d.p) + '/' + c.n.name, label: d.label.replace(/\/$/, '') + '/' + c.n.name })));
+        if (all && a.flags.has('a')) {
           const self = ctx.fs.get(d.p);
           children = [{ n: self, label: '.' }, { n: self, label: '..' }, ...children];
         }
-        if (paths.length > 1) out += (out ? '\n' : '') + d.label + ':\n';
+        if (paths.length > 1 || recursive) out += (out ? '\n' : '') + d.label + ':\n';
         out += fmt(children, true);
       } catch (e) {
         if (e instanceof FsErr) {

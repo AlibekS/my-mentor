@@ -41,7 +41,8 @@ const lesson: LessonDef = {
     {
       id: 'upstream',
       prompt: 'На какой **порт** nginx проксирует запросы к приложению (upstream)? Введи номер порта.',
-      answer: { accept: ['8081'], normalize: 'number', label: 'Порт:' },
+      // «8081», «:8081», «127.0.0.1:8081» — главное, чтобы был порт
+      answer: { accept: [], normalize: 'keywords', keywords: [['8081']], label: 'Порт:' },
       hints: ['Смотри поле `upstream: "http://..."` в строках error.log.'],
       solution: 'grep -o "upstream: \\"[^\\"]*" /var/log/nginx/error.log | head -1',
       tags: ['grep'],
@@ -57,7 +58,8 @@ const lesson: LessonDef = {
     {
       id: 'everywhere',
       prompt: 'Найди request id `8f3a` **во всех логах** в `/var/log` сразу (рекурсивно).',
-      check: { type: 'all', checks: [{ type: 'outputContains', value: ['/var/log/nginx/access.log:', '/var/log/shop/app.log:'] }] },
+      // без двоеточий — чтобы засчитывался и `grep -rl` (только имена файлов)
+      check: { type: 'all', checks: [{ type: 'outputContains', value: ['/var/log/nginx/access.log', '/var/log/shop/app.log'] }, { type: 'outputNotContains', value: '/var/log/nginx/error.log' }] },
       hints: ['Рекурсивный поиск — `-r`.'],
       solution: 'grep -r 8f3a /var/log',
       tags: ['grep'],
@@ -83,7 +85,7 @@ const lesson: LessonDef = {
       id: 'q-where',
       type: 'text',
       prompt: 'По стек-трейсу из задания: в каком **классе и методе** кода магазина упало? (формат Класс.метод)',
-      answer: { accept: ['TaxService.calc', 'kz.shop.checkout.TaxService.calc'] },
+      answer: { accept: ['TaxService.calc', 'kz.shop.checkout.TaxService.calc', 'TaxService.calc()', 'kz.shop.checkout.TaxService.calc()', 'TaxService#calc', 'TaxService::calc'] },
       explanation: 'Первый кадр с кодом компании (`kz.shop...`) — `TaxService.calc` (TaxService.java:42). Причина — пустой address.',
     },
     {

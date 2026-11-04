@@ -17,9 +17,10 @@ const t: PlacementTopic = {
       id: 'pl-lin-4',
       difficulty: 3,
       lessons: ['permissions', 'viewing'],
-      prompt: 'Сервис `api` работает от пользователя `api` и не может прочитать `/etc/api/token`. Исследуй сервер и введи, **какая команда** (одна, с sudo) исправит доступ, если владелец должен остаться root, а права стать 640. Ответ — только недостающий шаг: что нужно поменять кроме chmod? Введи `chown ...` целиком.',
+      prompt: 'Сервис `api` работает от пользователя `api` и не может прочитать `/etc/api/token`. Исследуй сервер (`ls -l`). Права 640 уже выставят отдельной командой `chmod`, а владельцем должен остаться root. Какой командой (с `sudo`) сменить то, чего не хватает? Введи команду целиком.',
       scenario: { files: { '/etc/api/token': { content: 'xyz', mode: 0o600, owner: 'root', group: 'root' }, '/etc/passwd': 'root:x:0:0::/root:/bin/bash\napi:x:990:990::/opt/api:/usr/sbin/nologin\nalibek:x:1000:1000::/home/alibek:/bin/bash\n' } },
-      answer: { accept: ['sudo chown root:api /etc/api/token', 'chown root:api /etc/api/token', 'sudo chown :api /etc/api/token', 'chown :api /etc/api/token', 'sudo chgrp api /etc/api/token', 'chgrp api /etc/api/token'], normalize: 'exact' },
+      // chown root:api / chown :api / chown root.api / chgrp api — в том числе вместе с «&& chmod 640»
+      answer: { accept: [], normalize: 'keywords', keywords: [['chown root:api', 'chown :api', 'chown root.api', 'chgrp api'], ['/etc/api/token']] },
     },
   ],
 };
