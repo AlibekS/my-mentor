@@ -105,7 +105,7 @@ const lesson: LessonDef = {
     {
       id: 'cron',
       prompt: 'Поставь `~/healthcheck.sh` в cron **каждые 5 минут** с выводом в `/tmp/healthcheck.log` (с ошибками). Путь к скрипту — полный: `/home/alibek/healthcheck.sh`.',
-      check: { type: 'custom', fn: (sh) => !!sh.fs.lookup('/var/spool/cron/crontabs/alibek')?.content.split('\n').some((l) => /^\*\/5\s+\*\s+\*\s+\*\s+\*\s+\/home\/alibek\/healthcheck\.sh\s*>>\s*\/tmp\/healthcheck\.log\s+2>&1\s*$/.test(l.trim())) },
+      check: { type: 'custom', fn: (sh) => !!sh.fs.lookup('/var/spool/cron/crontabs/alibek')?.content.split('\n').some((l) => /^\*\/5\s+\*\s+\*\s+\*\s+\*\s+(?:(?:\/usr)?\/bin\/)?(?:(?:ba)?sh\s+)?\/home\/alibek\/healthcheck\.sh\s*>>?\s*\/tmp\/healthcheck\.log\s+2>&1\s*$/.test(l.trim())) },
       hints: ["`echo '*/5 * * * * /home/alibek/healthcheck.sh >> /tmp/healthcheck.log 2>&1' > ~/mycron`", '`crontab ~/mycron && crontab -l`'],
       solution: "echo '*/5 * * * * /home/alibek/healthcheck.sh >> /tmp/healthcheck.log 2>&1' > ~/mycron\ncrontab ~/mycron",
     },

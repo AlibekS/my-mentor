@@ -27,6 +27,9 @@ const lesson: LessonDef = {
       hosts: { 'ifconfig.me': { ip: '34.117.59.81' }, 'api.kazpost-logistics.kz': { ip: '91.201.215.10' } },
       http: {
         'https://ifconfig.me/': { status: 200, body: '34.89.120.17' },
+        'http://ifconfig.me/': { status: 200, body: '34.89.120.17' },
+        'https://ifconfig.me/ip': { status: 200, body: '34.89.120.17' },
+        'http://ifconfig.me/ip': { status: 200, body: '34.89.120.17' },
         'https://api.kazpost-logistics.kz/hooks/orders': { status: 403, body: '{"error":"IP not allowed"}\n', headers: { 'Content-Type': 'application/json' } },
       },
     },
@@ -43,7 +46,7 @@ const lesson: LessonDef = {
     {
       id: 'change',
       prompt: 'Что изменилось прямо перед первым 403? Найди в том же логе запись infra и введи **номер изменения**.',
-      answer: { accept: ['CHG-911', '911'], label: 'Изменение:' },
+      answer: { accept: [], normalize: 'keywords', keywords: [['911']], label: 'Изменение:' },
       hints: ['`grep infra /var/log/notifier/webhooks.log`', 'Или: `grep -B1 -m1 403 …` — строка перед первым 403.'],
       solution: 'grep infra /var/log/notifier/webhooks.log',
     },
@@ -70,10 +73,10 @@ const lesson: LessonDef = {
         minWords: 45,
         rubric: [
           { label: '403 / IP not allowed', any: ['403', 'not allowed', 'rejected', 'forbidden'] },
-          { label: 'время начала UTC', any: ['\\d{1,2}:\\d{2}\\s?UTC'] },
+          { label: 'время начала UTC', any: ['\\d{1,2}:\\d{2}\\s?\\(?UTC', 'UTC\\s?\\d{1,2}:\\d{2}'] },
           { label: 'новый IP 34.89.120.17', any: ['34\\.89\\.120\\.17'] },
           { label: 'просьба добавить в allowlist', any: ['(add|whitelist|allowlist|allow).{0,40}(ip|address|34\\.89)', 'allow ?list'] },
-          { label: 'переотправим пропущенные события', any: ['resen[dt]', 're-?deliver', 'replay', 'retry (the )?(missed|failed)'] },
+          { label: 'переотправим пропущенные события', any: ['re-?sen[dt]', 're-?deliver', 'replay', 'retry', 're-?push', 'send .{0,40}again'] },
           { label: 'вежливое закрытие / контакт', any: ['thank', 'regards', 'contact', 'reach (out|us)'] },
         ],
       },
@@ -83,9 +86,9 @@ const lesson: LessonDef = {
   ],
   quiz: [
     { id: 'q-403', type: 'choice', prompt: 'После переноса нашего сервиса в новый облачный регион партнёр отвечает 403, хотя токен верный. Наиболее вероятная причина?', options: ['Истёк сертификат партнёра', 'Наш egress IP изменился и не входит в allowlist партнёра', 'Партнёр удалил эндпоинт'], correct: 1, explanation: 'Удалённый эндпоинт дал бы 410/404, проблема с сертификатом — ошибку TLS.' },
-    { id: 'q-egress', type: 'text', prompt: 'Как по-английски называется исходящий внешний IP-адрес сервиса? (одно слово + IP)', answer: { accept: ['egress IP', 'egress', 'outbound IP', 'outgoing IP'] }, explanation: 'Egress IP (outbound).' },
+    { id: 'q-egress', type: 'text', prompt: 'Как по-английски называется исходящий внешний IP-адрес сервиса? (одно слово + IP)', answer: { accept: [], normalize: 'keywords', keywords: [['egress', 'outbound', 'outgoing']] }, explanation: 'Egress IP (outbound).' },
     { id: 'q-401', type: 'text', prompt: 'Партнёр отвечает 401 на наши вебхуки. Что проверить первым? (ключевые слова: токен/секрет/подпись)', answer: { accept: [], normalize: 'keywords', keywords: [['токен', 'token', 'секрет', 'secret', 'подпис', 'signature', 'credential', 'ключ']] }, explanation: '401 — аутентификация: токен, секрет подписи, срок действия.' },
-    { id: 'q-prevent', type: 'text', prompt: 'Action item, чтобы такое не повторилось (ключевые слова: реестр/уведомлять партнёров заранее/фиксированный IP).', answer: { accept: [], normalize: 'keywords', keywords: [['реестр', 'список', 'уведом', 'заранее', 'фиксирован', 'статическ', 'static', 'notify']] }, explanation: 'Реестр партнёров с allowlist + уведомление заранее при смене egress; статические IP для интеграций.' },
+    { id: 'q-prevent', type: 'text', prompt: 'Action item, чтобы такое не повторилось (ключевые слова: реестр/уведомлять партнёров заранее/фиксированный IP).', answer: { accept: [], normalize: 'keywords', keywords: [['реестр', 'список', 'уведом', 'заранее', 'фиксирован', 'статическ', 'static', 'notify', 'предупре', 'согласов', 'allowlist']] }, explanation: 'Реестр партнёров с allowlist + уведомление заранее при смене egress; статические IP для интеграций.' },
   ],
   glossary: [
     { ru: 'Белый список IP', en: 'IP allowlist', def: 'Список адресов, с которых разрешены запросы.' },

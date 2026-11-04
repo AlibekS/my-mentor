@@ -33,7 +33,7 @@ const lesson: LessonDef = {
     {
       id: 'nx',
       prompt: 'Клиент пишет, что не открывается `app.shop.kz`. Проверь DNS и введи **status** из ответа.',
-      answer: { accept: ['NXDOMAIN'], label: 'status:' },
+      answer: { accept: ['NXDOMAIN', 'status: NXDOMAIN'], label: 'status:' },
       hints: ['`dig app.shop.kz`, строка HEADER.'],
       solution: 'dig app.shop.kz',
       explanation: 'NXDOMAIN — такой записи нет. Вероятно, её забыли создать (или клиент ошибся в адресе — уточни).',
@@ -60,7 +60,7 @@ const lesson: LessonDef = {
     { id: 'q-nx', type: 'text', prompt: 'Какой status вернёт DNS, если такого имени не существует?', answer: { accept: ['NXDOMAIN'] }, explanation: 'NXDOMAIN — non-existent domain.' },
     { id: 'q-ttl', type: 'choice', prompt: 'DNS-запись поменяли час назад, но у части клиентов открывается старый сервер. TTL записи был 86400. Почему?', options: ['DNS сломан', 'Старый ответ кеширован до истечения TTL (до суток)', 'У клиентов плохой интернет'], correct: 1, explanation: 'TTL 86400 с = 24 часа кеширования. Перед миграциями TTL снижают заранее.' },
     { id: 'q-file', type: 'text', prompt: 'В каком файле указано, к каким DNS-серверам обращается Linux? (полный путь)', answer: { accept: ['/etc/resolv.conf'] }, explanation: '`/etc/resolv.conf` (на Ubuntu часто указывает на локальный systemd-resolved 127.0.0.53).' },
-    { id: 'q-dig', type: 'command', prompt: 'Выведи только IP для `cdn.shop.kz` (короткий вывод dig).', scenario, solution: 'dig +short cdn.shop.kz', explanation: '`dig +short` покажет цепочку CNAME и итоговый адрес.' },
+    { id: 'q-dig', type: 'command', prompt: 'Выведи только IP для `cdn.shop.kz` (короткий вывод dig).', scenario, solution: 'dig +short cdn.shop.kz', check: { type: 'all', checks: [{ type: 'outputContains', value: '151.101.1.57' }, { type: 'commandUsed', name: 'dig' }, { type: 'outputNotContains', value: ['ANSWER SECTION', 'HEADER'] }] }, explanation: '`dig +short` покажет цепочку CNAME и итоговый адрес; оставить только IP — `dig +short cdn.shop.kz | tail -1`.' },
   ],
   glossary: [
     { ru: 'Несуществующий домен', en: 'NXDOMAIN', def: 'Ответ DNS: такого имени нет.' },

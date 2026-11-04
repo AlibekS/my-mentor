@@ -1,6 +1,6 @@
 import type { LessonDef } from '../../../../src/content/types';
 
-const oldCert = { subject: 'CN = api.shop.kz', issuer: "C = US, O = Let's Encrypt, CN = R11", notBefore: 'Aug  2 00:00:00 2026 GMT', notAfter: 'Oct 31 23:59:59 2026 GMT' };
+const oldCert = { subject: 'CN = api.shop.kz', issuer: "C = US, O = Let's Encrypt, CN = R11", notBefore: 'Aug  5 00:00:00 2026 GMT', notAfter: 'Nov  3 23:59:59 2026 GMT' };
 const newCert = { subject: 'CN = api.shop.kz', issuer: "C = US, O = Let's Encrypt, CN = R10", notBefore: 'Nov  1 00:00:00 2026 GMT', notAfter: 'Jan 30 23:59:59 2027 GMT' };
 
 const scenario = {
@@ -49,7 +49,8 @@ const lesson: LessonDef = {
     {
       id: 'cert',
       prompt: 'Посмотри сертификат, который отдаёт `api.shop.kz`, через `openssl s_client`. Выведи его (задание засчитается по наличию NotAfter в выводе).',
-      check: { type: 'all', checks: [{ type: 'outputContains', value: ['NotAfter: Oct 31', 'certificate has expired'] }] },
+      // NotAfter из s_client или notAfter= из openssl x509 -dates/-enddate
+      check: { type: 'outputMatches', pattern: 'not ?after\\s*[:=]\\s*Nov\\s+3\\b', flags: 'im' },
       hints: ['`openssl s_client -connect api.shop.kz:443 -servername api.shop.kz`'],
       solution: 'openssl s_client -connect api.shop.kz:443 -servername api.shop.kz',
       tags: ['openssl'],
@@ -71,7 +72,7 @@ const lesson: LessonDef = {
     },
   ],
   quiz: [
-    { id: 'q-rca', type: 'text', prompt: 'RCA одной фразой (ключевые слова: DNS/CNAME не переключили и сертификат старого балансировщика истёк).', answer: { accept: [], normalize: 'keywords', keywords: [['dns', 'cname', 'переключ'], ['сертификат', 'certificate', 'истек', 'истёк', 'expired', 'lb-old', 'старый']] }, explanation: 'DNS api.shop.kz остался на lb-old (шаг 3 не выполнен), а сертификат на lb-old истёк 31 октября — партнёры получили ошибку TLS. Мобильное приложение ходит на другой домен и не пострадало.' },
+    { id: 'q-rca', type: 'text', prompt: 'RCA одной фразой (ключевые слова: DNS/CNAME не переключили и сертификат старого балансировщика истёк).', answer: { accept: [], normalize: 'keywords', keywords: [['dns', 'cname', 'переключ'], ['сертификат', 'certificate', 'истек', 'истёк', 'expired', 'lb-old', 'старый']] }, explanation: 'DNS api.shop.kz остался на lb-old (шаг 3 не выполнен), а сертификат на lb-old истёк в ночь на 4 ноября — партнёры получили ошибку TLS. Мобильное приложение ходит на другой домен и не пострадало.' },
     { id: 'q-fix', type: 'choice', prompt: 'Что сделать в первую очередь, чтобы восстановить сервис?', options: ['Сказать партнёрам добавить -k', 'Переключить CNAME api.shop.kz на lb-new (новый сертификат уже есть) и следить за TTL; параллельно — продлить сертификат на lb-old на время переходного периода', 'Откатить релиз 2.15.0'], correct: 1, explanation: 'Восстановление — завершить шаг миграции. Пока кеши DNS не обновились, помогает и продление сертификата на старом LB.' },
     { id: 'q-prevent', type: 'text', prompt: 'Action item, чтобы такое не повторилось (ключевые слова: мониторинг сертификатов/алерт или чек-лист/проверка миграции).', answer: { accept: [], normalize: 'keywords', keywords: [['монитор', 'алерт', 'alert', 'чек-лист', 'checklist', 'провер', 'smoke', 'автопродл']] }, explanation: 'Мониторинг сроков сертификатов на всех LB + чек-лист миграции с проверкой итогового DNS и внешним smoke-тестом.' },
   ],

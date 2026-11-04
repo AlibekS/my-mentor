@@ -67,10 +67,10 @@ const lesson: LessonDef = {
     },
   ],
   quiz: [
-    { id: 'q-avail', type: 'text', prompt: 'Какую колонку `free -h` смотреть, чтобы понять, хватает ли памяти приложениям? (одно слово)', answer: { accept: ['available'] }, explanation: '`available` — free + та часть кеша, которую можно освободить.' },
+    { id: 'q-avail', type: 'text', prompt: 'Какую колонку `free -h` смотреть, чтобы понять, хватает ли памяти приложениям? (одно слово)', answer: { accept: ['available', 'avail'] }, explanation: '`available` — free + та часть кеша, которую можно освободить.' },
     { id: 'q-137', type: 'text', prompt: 'Процесс убит OOM killer. Какой код выхода увидит systemd/контейнер? (число)', answer: { accept: ['137'], normalize: 'number' }, explanation: '137 = 128 + 9 (SIGKILL).' },
     { id: 'q-leak', type: 'choice', prompt: 'RSS сервиса растёт с 300 МБ до 4 ГБ за сутки и не падает, после рестарта цикл повторяется. Что это похоже?', options: ['Нормальное кеширование файлов', 'Утечка памяти в приложении', 'Нехватка диска'], correct: 1, explanation: 'Монотонный рост без освобождения — признак утечки. Нужен heap dump для разработчиков.' },
-    { id: 'q-kernel', type: 'command', prompt: 'Выведи сообщения ядра, содержащие `oom` (без учёта регистра).', scenario, solution: 'journalctl -k | grep -i oom', explanation: '`journalctl -k | grep -i oom` или `sudo dmesg -T | grep -i oom`.' },
+    { id: 'q-kernel', type: 'command', prompt: 'Выведи сообщения ядра, содержащие `oom` (без учёта регистра).', scenario, solution: 'journalctl -k | grep -i oom', check: { type: 'all', checks: [{ type: 'outputContains', value: ['oom-killer', 'Killed process 3977'] }, { type: 'outputNotContains', value: 'EXT4' }] }, explanation: '`journalctl -k | grep -i oom` или `sudo dmesg -T | grep -i oom`.' },
   ],
   glossary: [
     { ru: 'Утечка памяти', en: 'memory leak', def: 'Память выделяется и не освобождается, процесс растёт.' },

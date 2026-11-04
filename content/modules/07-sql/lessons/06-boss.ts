@@ -27,7 +27,7 @@ const lesson: LessonDef = {
     {
       id: 'window',
       prompt: 'Когда началось? Введи время (`ЧЧ:ММ`) самого раннего **повторного** списания — минимальный `created_at` среди «лишних» платежей (вторых по заказу).',
-      answer: { accept: [facts.firstDup.slice(11, 16)], label: 'Время (ЧЧ:ММ):' },
+      answer: { accept: [], normalize: 'keywords', keywords: [[facts.firstDup.slice(11, 16)]], label: 'Время (ЧЧ:ММ):' },
       hints: [
         'Платежи по заказам-дублям с порядком внутри заказа — оконная функция `ROW_NUMBER() OVER (PARTITION BY order_id ORDER BY created_at)`.',
         'Или проще: для каждого заказа-дубля `MAX(created_at)` — время второго списания; потом MIN по ним.',

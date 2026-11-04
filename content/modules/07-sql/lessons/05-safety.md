@@ -15,23 +15,23 @@
 
 ```sql
 -- 1. Что затронем?
-SELECT id, status FROM orders WHERE status = 'pending' AND id IN (1201, 1202);
+SELECT id, status FROM orders WHERE status = 'pending' AND id IN (1213, 1215);
 -- 2. Сколько? Должно совпасть с ожиданием из тикета
-SELECT COUNT(*) FROM orders WHERE status = 'pending' AND id IN (1201, 1202);
+SELECT COUNT(*) FROM orders WHERE status = 'pending' AND id IN (1213, 1215);
 -- 3. Только теперь
-UPDATE orders SET status = 'paid' WHERE status = 'pending' AND id IN (1201, 1202);
+UPDATE orders SET status = 'paid' WHERE status = 'pending' AND id IN (1213, 1215);
 ```
 
 ## Транзакции
 
 ```sql
 BEGIN;
-UPDATE orders SET status = 'paid' WHERE id = 1201;
-SELECT id, status FROM orders WHERE id = 1201;   -- проверили
+UPDATE orders SET status = 'paid' WHERE id = 1213;
+SELECT id, status FROM orders WHERE id = 1213;   -- проверили
 ROLLBACK;                                        -- или COMMIT, если всё верно
 ```
 
-Пока нет `COMMIT`, изменения видны только тебе. В PostgreSQL удобен приём: `BEGIN; UPDATE ...;` → смотрим «`UPDATE 3`» → если ждали 3 — `COMMIT`, иначе `ROLLBACK`.
+В SQLite и PostgreSQL транзакцию открывает `BEGIN;` (в MySQL можно и `START TRANSACTION;` — в SQLite такой команды нет). Пока нет `COMMIT`, изменения видны только тебе. В PostgreSQL удобен приём: `BEGIN; UPDATE ...;` → смотрим «`UPDATE 3`» → если ждали 3 — `COMMIT`, иначе `ROLLBACK`.
 
 > Длинная открытая транзакция держит блокировки — не уходи на обед посреди `BEGIN`.
 

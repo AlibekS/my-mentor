@@ -1,4 +1,5 @@
 import type { PlacementTopic } from '../../src/content/types';
+import { STRICT_MODE_VARIANTS } from '../modules/08-scripting/data';
 
 const t: PlacementTopic = {
   moduleId: '08-scripting',
@@ -12,7 +13,7 @@ const t: PlacementTopic = {
       scenario: { files: { '/var/log/app.log': 'INFO ok\nFATAL disk full\n' } },
       solution: 'grep -q FATAL /var/log/app.log && echo ALERT',
     },
-    { id: 'pl-sh-3', difficulty: 3, lessons: ['scripts'], prompt: 'Какой строкой в начале bash-скрипта включить «строгий режим»: выход при ошибке, ошибка при неопределённой переменной и при сбое в пайпе?', answer: { accept: ['set -euo pipefail', 'set -eu -o pipefail', 'set -e -u -o pipefail'], normalize: 'exact' } },
+    { id: 'pl-sh-3', difficulty: 3, lessons: ['scripts'], prompt: 'Какой строкой в начале bash-скрипта включить «строгий режим»: выход при ошибке, ошибка при неопределённой переменной и при сбое в пайпе?', answer: { accept: STRICT_MODE_VARIANTS, normalize: 'exact' } },
   ],
 };
 export default t;

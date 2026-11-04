@@ -23,7 +23,7 @@ const lesson: LessonDef = {
         fn: (sh) => {
           const n = sh.fs.lookup('/var/spool/cron/crontabs/alibek');
           if (!n) return false;
-          return n.content.split('\n').some((l) => /^\*\/5\s+\*\s+\*\s+\*\s+\*\s+\/opt\/scripts\/health\.sh\s*>>\s*\/var\/log\/health\.log\s+2>&1\s*$/.test(l.trim()));
+          return n.content.split('\n').some((l) => /^\*\/5\s+\*\s+\*\s+\*\s+\*\s+(?:(?:\/usr)?\/bin\/)?(?:(?:ba)?sh\s+)?\/opt\/scripts\/health\.sh\s*>>?\s*\/var\/log\/health\.log\s+2>&1\s*$/.test(l.trim()));
         },
       },
       hints: ['Строка: `*/5 * * * * /opt/scripts/health.sh >> /var/log/health.log 2>&1`', "Создать файл: `echo '…' > ~/mycron` (одинарные кавычки, чтобы `*` не раскрылась).", 'Установить: `crontab ~/mycron`, проверить: `crontab -l`.'],
@@ -32,7 +32,7 @@ const lesson: LessonDef = {
     {
       id: 'when',
       prompt: 'Посмотри задачи пользователя `backup` (`sudo crontab -u backup -l`). В какое время запускается бэкап? Введи `ЧЧ:ММ`.',
-      answer: { accept: ['02:15', '2:15'], label: 'Время:' },
+      answer: { accept: ['02:15', '2:15', '02:15 ночи', '2:15 ночи', 'в 02:15', 'в 2:15', '02:15:00'], label: 'Время:' },
       hints: ['`sudo crontab -u backup -l`', 'Первое поле — минуты, второе — часы.'],
       solution: 'sudo crontab -u backup -l\n# 15 2 → 02:15',
     },
@@ -46,10 +46,10 @@ const lesson: LessonDef = {
     },
   ],
   quiz: [
-    { id: 'q-daily3', type: 'text', prompt: 'Запиши расписание cron «каждый день в 03:00» (5 полей).', answer: { accept: ['0 3 * * *'], normalize: 'exact' }, explanation: '`0 3 * * *` — минута 0, час 3.' },
+    { id: 'q-daily3', type: 'text', prompt: 'Запиши расписание cron «каждый день в 03:00» (5 полей).', answer: { accept: ['0 3 * * *', '00 03 * * *', '0 03 * * *', '00 3 * * *'] }, explanation: '`0 3 * * *` — минута 0, час 3.' },
     { id: 'q-every', type: 'choice', prompt: 'Что означает `* 3 * * *`?', options: ['Один раз в 03:00', 'Каждую минуту с 03:00 до 03:59', 'Каждые 3 минуты'], correct: 1, explanation: '`*` в поле минут — каждую минуту.' },
-    { id: 'q-weekdays', type: 'text', prompt: 'Расписание «по будням (пн–пт) в 09:30» (5 полей).', answer: { accept: ['30 9 * * 1-5', '30 09 * * 1-5', '30 9 * * mon-fri'], normalize: 'exact' }, explanation: '`30 9 * * 1-5`.' },
-    { id: 'q-timers', type: 'text', prompt: 'Какой командой показать все systemd-таймеры и время следующего запуска? (команда целиком)', answer: { accept: ['systemctl list-timers', 'systemctl list-timers --all'], normalize: 'exact' }, explanation: '`systemctl list-timers`.' },
+    { id: 'q-weekdays', type: 'text', prompt: 'Расписание «по будням (пн–пт) в 09:30» (5 полей).', answer: { accept: ['30 9 * * 1-5', '30 09 * * 1-5', '30 9 * * mon-fri', '30 09 * * mon-fri'] }, explanation: '`30 9 * * 1-5`.' },
+    { id: 'q-timers', type: 'text', prompt: 'Какой командой показать все systemd-таймеры и время следующего запуска? (команда целиком)', answer: { accept: ['systemctl list-timers', 'systemctl list-timers --all', 'sudo systemctl list-timers', 'sudo systemctl list-timers --all'], normalize: 'exact' }, explanation: '`systemctl list-timers`.' },
   ],
   glossary: [
     { ru: 'Планировщик задач', en: 'cron / crontab', def: 'Запуск команд по расписанию из пяти полей.' },

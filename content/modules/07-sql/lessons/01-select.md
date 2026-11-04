@@ -51,7 +51,7 @@ WHERE date(created_at) = '2026-11-04'
 SELECT id FROM customers WHERE email = 'aigerim.s@mail.kz';
 SELECT id, status, total, created_at FROM orders WHERE customer_id = 7 ORDER BY created_at DESC LIMIT 5;
 ```
-Заказ есть, статус `pending` — значит, проблема не в «пропал», а в «завис». Следующий шаг — платежи.
+Если заказ на месте, но, например, в статусе `pending` — проблема не в «пропал», а в «завис». Следующий шаг — платежи по этому заказу.
 
 ## Типичные ошибки
 

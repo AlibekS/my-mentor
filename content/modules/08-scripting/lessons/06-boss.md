@@ -18,12 +18,15 @@
 #!/usr/bin/env bash
 FAILED=0
 check() {          # check "описание" команда...
-  local name=$1; shift
+  local name="$1"; shift
   if "$@" > /dev/null 2>&1; then echo "OK: $name"; else echo "FAIL: $name"; FAILED=1; fi
 }
-# check "nginx active" systemctl is-active nginx
-# ...
+check "nginx active" systemctl is-active nginx
+# check "shop active" ...
+# USED=$(df / | awk 'NR==2 {print $5}' | tr -d '%')
+# check "disk $USED%" [ "$USED" -lt 85 ]
+# check "http 200" curl -sf https://shop.kz/health
 exit $FAILED
 ```
 
-> В тренажёре функция с `"$@"` работает упрощённо, поэтому проще писать проверки через `if … then … fi` по очереди.
+> `"$@"` — все аргументы функции после `shift`, то есть сама команда проверки со своими аргументами. Можно обойтись и без функции: те же проверки по очереди через `if … then … fi`.

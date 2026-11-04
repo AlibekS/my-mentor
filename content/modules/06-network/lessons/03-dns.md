@@ -6,7 +6,7 @@
 
 ```
 dig api.shop.kz            # полный ответ
-dig +short api.shop.kz     # только результат: 10.0.2.5
+dig +short api.shop.kz     # коротко: lb-eu.shop.kz. и 10.0.2.5 (у CNAME — вся цепочка)
 dig api.shop.kz MX         # почтовые записи
 dig @8.8.8.8 api.shop.kz   # спросить конкретный DNS-сервер
 ```

@@ -62,7 +62,7 @@ const lesson: LessonDef = {
           { label: 'next update', any: NEXT_UPDATE },
         ],
       },
-      hints: ['Severity: ключевая функция деградировала у всех, но сайт и оплата работают — обычно SEV2.', 'Начало — первые ошибки в логе (09:15 UTC).', 'Формат как в уроке «Триаж».'],
+      hints: ['Severity: покупки и оплата работают, а письма и сброс пароля — нет. Это серьёзная деградация, но не полная недоступность ключевой функции — обычно SEV2 (SEV1 тоже можно обосновать).', 'Начало — первые ошибки в логе (09:15 UTC).', 'Формат как в уроке «Триаж».'],
       solution: 'SEV2 declared: transactional emails are not delivered\nImpact: 100% of order confirmation and password reset emails fail since 09:15 UTC; users cannot reset passwords.\nIC: @alibek\nChannel: #inc-8200\nNext update: 10:10 UTC',
     },
     {

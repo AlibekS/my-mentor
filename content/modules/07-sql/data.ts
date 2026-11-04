@@ -186,14 +186,9 @@ function sql(): string {
 export const dataset = sql();
 
 // --- ответы для заданий (вычисляются из тех же данных)
-const succeeded = payments.filter((p) => p.status === 'succeeded');
-const byOrder = new Map<number, Payment[]>();
-for (const p of succeeded) byOrder.set(p.order_id, [...(byOrder.get(p.order_id) ?? []), p]);
-const dupOrders = [...byOrder.entries()].filter(([, ps]) => ps.length > 1);
-const orderById = new Map(orders.map((o) => [o.id, o]));
 export const facts = {
-  aigerimId: 7,
-  aigerimOrders: orders.filter((o) => o.customer_id === 7).length,
+  aigerimId: AIGERIM,
+  aigerimOrders: orders.filter((o) => o.customer_id === AIGERIM).length,
   ordersTotal: orders.length,
   pendingCount: orders.filter((o) => o.status === 'pending').length,
   dupOrders: dupOrders.length,

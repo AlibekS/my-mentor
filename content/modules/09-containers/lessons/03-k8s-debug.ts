@@ -73,7 +73,7 @@ const lesson: LessonDef = {
     },
   ],
   quiz: [
-    { id: 'q-prev', type: 'text', prompt: 'Какой флаг `kubectl logs` показывает логи предыдущего (упавшего) экземпляра контейнера?', answer: { accept: ['--previous', '-p'] }, explanation: '`kubectl logs POD --previous`.' },
+    { id: 'q-prev', type: 'text', prompt: 'Какой флаг `kubectl logs` показывает логи предыдущего (упавшего) экземпляра контейнера?', answer: { accept: ['--previous', '-p', 'kubectl logs --previous', 'kubectl logs -p', '-p, --previous', '--previous, -p'] }, explanation: '`kubectl logs POD --previous`.' },
     { id: 'q-137', type: 'text', prompt: 'В describe: `Last State: Terminated, Reason: OOMKilled`. Какой будет Exit Code? (число)', answer: { accept: ['137'], normalize: 'number' }, explanation: '137 = SIGKILL от OOM killer по лимиту памяти контейнера.' },
     { id: 'q-pull', type: 'choice', prompt: 'ImagePullBackOff — самые частые причины?', options: ['Ошибка в коде приложения', 'Опечатка в имени/теге образа или нет доступа к registry (credentials)', 'Не хватает памяти на ноде'], correct: 1, explanation: 'Смотри Events: `manifest unknown` (нет тега) или `unauthorized` (доступ).' },
     { id: 'q-events', type: 'command', prompt: 'Выведи события текущего namespace.', scenario, solution: 'kubectl get events', explanation: '`kubectl get events` (часто с `--sort-by=.lastTimestamp`).' },

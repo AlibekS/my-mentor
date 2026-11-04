@@ -78,7 +78,7 @@ const lesson: LessonDef = {
   quiz: [
     { id: 'q-pod', type: 'choice', prompt: 'Под упал и был пересоздан деплойментом. Что изменится?', options: ['Ничего', 'Имя и IP пода (новый под), образ тот же', 'Образ обновится до последней версии'], correct: 1, explanation: 'Поды эфемерны: новый под — новое имя и IP. Постоянный адрес даёт Service.' },
     { id: 'q-all', type: 'text', prompt: 'Каким флагом `kubectl get` смотреть ресурсы во всех namespace? (короткий)', answer: { accept: ['-A', '--all-namespaces'] }, explanation: '`kubectl get pods -A`.' },
-    { id: 'q-svc', type: 'text', prompt: 'Какой объект даёт постоянное имя и IP перед группой подов? (англ.)', answer: { accept: ['Service', 'svc'] }, explanation: 'Service выбирает поды по селектору (например `app=checkout`).' },
+    { id: 'q-svc', type: 'text', prompt: 'Какой объект даёт постоянное имя и IP перед группой подов? (англ.)', answer: { accept: ['Service', 'svc', 'Service (svc)', 'сервис', 'Kubernetes Service'] }, explanation: 'Service выбирает поды по селектору (например `app=checkout`).' },
     { id: 'q-wide', type: 'command', prompt: 'Выведи поды namespace prod с IP и нодами.', scenario, solution: 'kubectl get pods -n prod -o wide', explanation: '`-o wide`.' },
   ],
   glossary: [

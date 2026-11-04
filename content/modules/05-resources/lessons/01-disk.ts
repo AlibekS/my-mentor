@@ -17,6 +17,13 @@ export const diskScenario = {
   },
 };
 
+/** Размер /var/log в том виде, как его печатает `du -sh` (целые гигабайты, округление вверх) */
+const varLogG = Math.ceil(
+  Object.entries(diskScenario.files)
+    .filter(([path]) => path.startsWith('/var/log/'))
+    .reduce((sum, [, f]) => sum + (typeof f === 'string' ? 0 : f.size ?? 0), 0) / GB,
+);
+
 const lesson: LessonDef = {
   id: 'disk',
   title: 'Диск: df, du, поиск виновника',
@@ -27,7 +34,7 @@ const lesson: LessonDef = {
     {
       id: 'df',
       prompt: 'Какой раздел почти заполнен? Посмотри занятость файловых систем в удобных единицах и введи **точку монтирования**.',
-      answer: { accept: ['/'], label: 'Mounted on:' },
+      answer: { accept: ['/', '/ (root)', 'root', 'корень', 'корневой', 'корневой раздел'], label: 'Mounted on:' },
       hints: ['`df -h`', 'Смотри на `Use%` и колонку `Mounted on`.'],
       solution: 'df -h',
       tags: ['df'],
@@ -35,7 +42,15 @@ const lesson: LessonDef = {
     {
       id: 'du-var',
       prompt: 'Выведи размер **каждого подкаталога** `/var`, отсортированный по размеру (самый большой — последним).',
-      check: { type: 'all', checks: [{ type: 'outputMatches', pattern: '/var/log\\s*$' }, { type: 'outputContains', value: '/var/lib' }] },
+      // последняя строка (без итоговых /var и total) — log, среди строк есть lib; пути могут быть с /var/ и слешем на конце или относительными
+      check: {
+        type: 'custom',
+        fn: (_sh, last) => {
+          if (!last) return false;
+          const rows = last.stdout.trim().split('\n').filter((l) => l.trim() && !/\s(\/var\/?|\.\/?|total|итого)$/.test(l));
+          return rows.length >= 3 && /(\s|\/)log\/?$/.test(rows[rows.length - 1]) && rows.some((l) => /(\s|\/)lib\/?$/.test(l));
+        },
+      },
       hints: ['`du -sh /var/*` — по каталогу на строку.', '`| sort -h` сортирует K/M/G правильно. Не забудь `sudo`.'],
       solution: 'sudo du -sh /var/* | sort -h',
       tags: ['du', 'sort'],
@@ -60,7 +75,7 @@ const lesson: LessonDef = {
   quiz: [
     { id: 'q-sorth', type: 'text', prompt: 'Какой флаг `sort` правильно сортирует размеры вида `900M`, `1.2G`, `21G`?', answer: { accept: ['-h', 'h', '--human-numeric-sort'] }, explanation: '`sort -h` (human). `sort -n` поставит 900M после 21G.' },
     { id: 'q-inodes', type: 'choice', prompt: '`df -h` показывает 40% занято, но приложение пишет `No space left on device`. Что проверить?', options: ['Перезагрузить сервер', 'Inodes: `df -i` — могли закончиться из-за миллионов мелких файлов', 'Это ошибка приложения, диск ни при чём'], correct: 1, explanation: 'Место и inodes — разные ресурсы.' },
-    { id: 'q-du', type: 'command', prompt: 'Выведи общий размер каталога `/var/log` одной строкой в удобных единицах.', scenario: diskScenario, solution: 'sudo du -sh /var/log', explanation: '`du -sh` — summary + human.' },
+    { id: 'q-du', type: 'command', prompt: 'Выведи общий размер каталога `/var/log` одной строкой в удобных единицах.', scenario: diskScenario, solution: 'sudo du -sh /var/log', check: { type: 'all', checks: [{ type: 'outputMatches', pattern: `^\\s*${varLogG}G(\\s|$)` }, { type: 'outputLines', value: 1 }] }, explanation: '`du -sh` — summary + human.' },
     { id: 'q-where', type: 'text', prompt: 'В каком каталоге обычно копятся образы и слои Docker? (полный путь)', answer: { accept: ['/var/lib/docker', '/var/lib/docker/'] }, explanation: '`/var/lib/docker` — чистится `docker system prune` (осторожно).' },
   ],
   glossary: [

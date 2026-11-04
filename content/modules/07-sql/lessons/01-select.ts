@@ -36,8 +36,8 @@ const lesson: LessonDef = {
     },
   ],
   quiz: [
-    { id: 'q-order', type: 'text', prompt: 'Какое ключевое слово ограничивает количество возвращаемых строк (в PostgreSQL, MySQL, SQLite)?', answer: { accept: ['LIMIT'] }, explanation: '`LIMIT 10`. В MS SQL — `SELECT TOP 10`.' },
-    { id: 'q-null', type: 'text', prompt: 'Как правильно написать условие «email не пустой (не NULL)»? (без WHERE)', answer: { accept: ['email IS NOT NULL'], normalize: 'exact' }, explanation: '`email IS NOT NULL`.' },
+    { id: 'q-order', type: 'text', prompt: 'Какое ключевое слово ограничивает количество возвращаемых строк (в PostgreSQL, MySQL, SQLite)?', answer: { accept: [], normalize: 'keywords', keywords: [['limit']] }, explanation: '`LIMIT 10`. В MS SQL — `SELECT TOP 10`.' },
+    { id: 'q-null', type: 'text', prompt: 'Как правильно написать условие «email не пустой (не NULL)»? (без WHERE)', answer: { accept: ['email IS NOT NULL', 'WHERE email IS NOT NULL'] }, explanation: '`email IS NOT NULL`.' },
     { id: 'q-sql-window', type: 'sql', prompt: 'Выведи `id, status, total` всех заказов, созданных **3 ноября 2026 с 14:00 до 15:00** (14:00 включительно, 15:00 — нет).', solution: "SELECT id, status, total FROM orders WHERE created_at >= '2026-11-03 14:00:00' AND created_at < '2026-11-03 15:00:00';", explanation: "`WHERE created_at >= '2026-11-03 14:00:00' AND created_at < '2026-11-03 15:00:00'` — полуоткрытый интервал, без пропусков и двойного счёта." },
     { id: 'q-like', type: 'sql', prompt: 'Выведи `id, email` клиентов с почтой на домене **company.de**.', solution: "SELECT id, email FROM customers WHERE email LIKE '%@company.de';", explanation: "`LIKE '%@company.de'` — `%` означает любую последовательность символов." },
   ],

@@ -31,7 +31,7 @@ const lesson: LessonDef = {
     {
       id: 'arith',
       prompt: 'Посчитай общее число строк `ERROR` в **обоих** логах (`app.log` и `worker.log`) через две подстановки и арифметику `$((...))` и выведи **только число**.',
-      check: { type: 'all', checks: [{ type: 'outputEquals', value: '4' }, { type: 'custom', fn: (_sh, last) => !!last && last.line.includes('$((') }] },
+      check: { type: 'all', checks: [{ type: 'outputEquals', value: '4' }, { type: 'custom', fn: (sh, last) => !!last && (last.line.includes('$((') || sh.history.slice(-5).some((h) => h.includes('$(('))) }] },
       hints: ['`A=$(grep -c ERROR /var/log/app/app.log)`, аналогично `B` для worker.log.', '`echo $((A + B))`'],
       solution: 'A=$(grep -c ERROR /var/log/app/app.log); B=$(grep -c ERROR /var/log/app/worker.log); echo $((A + B))',
     },

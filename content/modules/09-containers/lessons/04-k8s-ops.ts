@@ -1,5 +1,6 @@
 import type { LessonDef } from '../../../../src/content/types';
 import type { Scenario } from '../../../../src/shell/types';
+import { memMi } from '../../../../src/shell/kube';
 
 const scenario: Scenario = {
   kube: {
@@ -63,7 +64,7 @@ const lesson: LessonDef = {
     {
       id: 'limits',
       prompt: '`search` падает с OOMKilled при лимите 512Mi. Подними лимит памяти деплоймента до **1Gi** и убедись, что под стал Running.',
-      check: { type: 'custom', fn: (sh) => sh.state.kube.pods.filter((p) => p.deployment === 'search').every((p) => p.status === 'Running') && sh.state.kube.deployments!.find((d) => d.name === 'search')!.memoryLimit === '1Gi' },
+      check: { type: 'custom', fn: (sh) => sh.state.kube.pods.filter((p) => p.deployment === 'search').every((p) => p.status === 'Running') && memMi(sh.state.kube.deployments!.find((d) => d.name === 'search')!.memoryLimit) === 1024 },
       hints: ['`kubectl set resources deployment search --limits=memory=1Gi`'],
       solution: 'kubectl set resources deployment search --limits=memory=1Gi',
       explanation: 'Это экстренная мера — изменение нужно перенести в манифест в git, иначе следующий деплой вернёт 512Mi.',
@@ -79,9 +80,9 @@ const lesson: LessonDef = {
     },
   ],
   quiz: [
-    { id: 'q-undo', type: 'text', prompt: 'Какой командой откатить деплоймент `api` на предыдущую ревизию? (команда целиком)', answer: { accept: ['kubectl rollout undo deployment/api', 'kubectl rollout undo deploy/api', 'kubectl rollout undo deployment api'], normalize: 'exact' }, explanation: '`kubectl rollout undo deployment/api`.' },
+    { id: 'q-undo', type: 'text', prompt: 'Какой командой откатить деплоймент `api` на предыдущую ревизию? (команда целиком)', answer: { accept: [], normalize: 'keywords', keywords: [['kubectl rollout undo'], ['api']] }, explanation: '`kubectl rollout undo deployment/api`.' },
     { id: 'q-endpoints', type: 'choice', prompt: '`kubectl get endpoints shop` → `<none>`, хотя поды Running и Ready. Вероятная причина?', options: ['Сервис удалён', 'Селектор сервиса не совпадает с метками подов', 'Нода NotReady'], correct: 1, explanation: 'Service выбирает поды по меткам; несовпадение = пустые endpoints.' },
-    { id: 'q-cpu', type: 'text', prompt: 'Что происходит с контейнером при превышении **CPU**-лимита (в отличие от памяти)? (ключевые слова: троттлинг/замедляется)', answer: { accept: [], normalize: 'keywords', keywords: [['тротл', 'throttl', 'замедл', 'тормоз', 'ограничива']] }, explanation: 'CPU троттлится (тормоза), а превышение памяти — OOMKilled.' },
+    { id: 'q-cpu', type: 'text', prompt: 'Что происходит с контейнером при превышении **CPU**-лимита (в отличие от памяти)? (ключевые слова: троттлинг/замедляется)', answer: { accept: [], normalize: 'keywords', keywords: [['тротл', 'троттл', 'throttl', 'замедл', 'медлен', 'тормоз', 'ограничива', 'slow']] }, explanation: 'CPU троттлится (тормоза), а превышение памяти — OOMKilled.' },
     { id: 'q-restart', type: 'command', prompt: 'Перезапусти все поды деплоймента `checkout` без смены образа.', scenario, solution: 'kubectl rollout restart deployment/checkout', check: { type: 'outputContains', value: 'restarted' }, explanation: '`kubectl rollout restart deployment/checkout`.' },
   ],
   glossary: [

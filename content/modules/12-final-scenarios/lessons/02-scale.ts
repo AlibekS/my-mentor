@@ -49,6 +49,8 @@ for (let k = 0; k < 12; k++) {
   });
 }
 
+const brokenPod = KUBE.pods.find((p) => p.ready === '0/1')!.name;
+
 const lesson: LessonDef = {
   id: 'scale',
   title: 'Сценарий: масштабировали — стало хуже',
@@ -70,7 +72,7 @@ const lesson: LessonDef = {
       id: 'when',
       prompt: 'Во сколько число реплик выросло до 12? Посмотри панель «Реплики api» на дашборде и введи `ЧЧ:ММ`.',
       tool: 'obs',
-      answer: { accept: ['10:18', '10:17', '10:19'], label: 'Время UTC:' },
+      answer: { accept: [], normalize: 'keywords', keywords: [['10:17', '10:18', '10:19']], label: 'Время UTC:', placeholder: 'ЧЧ:ММ' },
       hints: ['Наведи курсор на ступеньку графика.'],
       solution: 'Дашборд → «Реплики api» → 10:18',
     },
@@ -80,7 +82,7 @@ const lesson: LessonDef = {
       tool: 'terminal',
       answer: { accept: [], normalize: 'keywords', keywords: [['too many clients', 'too many connections']], label: 'Ошибка:' },
       hints: ['`kubectl get pods`', '`kubectl logs <под с 0/1>`'],
-      solution: 'kubectl logs api-7c9d5f8b6d-r1s2t',
+      solution: `kubectl get pods\nkubectl logs ${brokenPod}`,
     },
     {
       id: 'math',
@@ -101,10 +103,10 @@ const lesson: LessonDef = {
     },
   ],
   quiz: [
-    { id: 'q-formula', type: 'text', prompt: 'Запиши условие для пулов соединений: реплики × … ≤ … − резерв (ключевые слова: пул и max_connections).', answer: { accept: [], normalize: 'keywords', keywords: [['пул', 'pool'], ['max_connections', 'максимум соединений', 'лимит']] }, explanation: '`replicas × pool_size ≤ max_connections − reserve`.' },
-    { id: 'q-pgbouncer', type: 'text', prompt: 'Как называется популярный пулер соединений для PostgreSQL? (одно слово)', answer: { accept: ['PgBouncer', 'pgbouncer', 'pgpool', 'pgcat'] }, explanation: 'PgBouncer мультиплексирует много клиентских соединений в небольшое число серверных.' },
+    { id: 'q-formula', type: 'text', prompt: 'Запиши условие для пулов соединений: реплики × … ≤ … − резерв (ключевые слова: пул и max_connections).', answer: { accept: [], normalize: 'keywords', keywords: [['пул', 'pool'], ['max_connections', 'max connections', 'max_conn', 'макс', 'лимит']] }, explanation: '`replicas × pool_size ≤ max_connections − reserve`.' },
+    { id: 'q-pgbouncer', type: 'text', prompt: 'Как называется популярный пулер соединений для PostgreSQL? (одно слово)', answer: { accept: [], normalize: 'keywords', keywords: [['pgbouncer', 'pg bouncer', 'pgpool', 'pgcat', 'odyssey']] }, explanation: 'PgBouncer мультиплексирует много клиентских соединений в небольшое число серверных.' },
     { id: 'q-shared', type: 'choice', prompt: 'Главный урок сценария?', options: ['Масштабировать нельзя никогда', 'Горизонтальное масштабирование упирается в общие ресурсы (БД, лимиты API) — их нужно учитывать', 'Kubernetes работает плохо'], correct: 1, explanation: 'Больше копий = больше нагрузки на общие зависимости.' },
-    { id: 'q-promql', type: 'promql', prompt: 'Построй долю 5xx сервиса api (один ряд).', solution: 'sum(rate(http_requests_total{code=~"5.."}[5m])) / sum(rate(http_requests_total[5m]))', explanation: 'Числитель — 5xx, знаменатель — все запросы.' },
+    { id: 'q-promql', type: 'promql', prompt: 'Построй долю 5xx сервиса api (один ряд, окно `[5m]`).', solution: 'sum(rate(http_requests_total{code=~"5.."}[5m])) / sum(rate(http_requests_total[5m]))', explanation: 'Числитель — 5xx, знаменатель — все запросы.' },
   ],
   glossary: [
     { ru: 'Горизонтальное масштабирование', en: 'horizontal scaling', def: 'Увеличение числа копий сервиса.' },

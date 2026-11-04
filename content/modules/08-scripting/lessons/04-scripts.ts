@@ -1,5 +1,5 @@
 import type { LessonDef } from '../../../../src/content/types';
-import { isExecutable, runUserScript } from '../data';
+import { isExecutable, runUserScript, STRICT_MODE_VARIANTS as STRICT } from '../data';
 
 const scenario = {
   files: {
@@ -74,7 +74,7 @@ chmod +x ~/svc.sh`,
     { id: 'q-shebang', type: 'text', prompt: 'Как называется первая строка скрипта вида `#!/usr/bin/env bash`? (англ.)', answer: { accept: ['shebang', 'шебанг', 'hashbang'] }, explanation: '**Shebang** указывает интерпретатор.' },
     { id: 'q-argc', type: 'text', prompt: 'Какая переменная содержит **количество** аргументов скрипта?', answer: { accept: ['$#'], normalize: 'exact' }, explanation: '`$#`; сами аргументы — `$1…`, все — `$@`.' },
     { id: 'q-126', type: 'choice', prompt: '`./deploy_check.sh` → `Permission denied`, код 126. Что сделать?', options: ['sudo ./deploy_check.sh', 'chmod +x deploy_check.sh (или запускать через bash deploy_check.sh)', 'Переименовать файл'], correct: 1, explanation: 'Нет права на выполнение.' },
-    { id: 'q-strict', type: 'text', prompt: 'Напиши строку «строгого режима» bash (три опции).', answer: { accept: ['set -euo pipefail', 'set -eu -o pipefail', 'set -e -u -o pipefail'], normalize: 'exact' }, explanation: '`set -euo pipefail`.' },
+    { id: 'q-strict', type: 'text', prompt: 'Напиши строку «строгого режима» bash (три опции).', answer: { accept: STRICT, normalize: 'exact' }, explanation: '`set -euo pipefail`.' },
   ],
   glossary: [
     { ru: 'Шебанг', en: 'shebang', def: 'Строка #! в начале скрипта с путём к интерпретатору.' },

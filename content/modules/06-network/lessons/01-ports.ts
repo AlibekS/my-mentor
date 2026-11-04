@@ -39,7 +39,8 @@ const lesson: LessonDef = {
     {
       id: 'listen',
       prompt: 'Выведи **все слушающие TCP и UDP порты с процессами** (с правами, чтобы видеть процессы).',
-      check: { type: 'all', checks: [{ type: 'outputContains', value: ['nginx', 'postgres', 'node_exporter', 'udp'] }, { type: 'outputContains', value: 'pid=' }] },
+      // systemd-resolve — единственный UDP-сокет: так засчитывается и `ss -tulpn`, и `ss -tlpn; ss -ulpn`
+      check: { type: 'all', checks: [{ type: 'outputContains', value: ['nginx', 'postgres', 'node_exporter', 'systemd-resolve'] }, { type: 'outputContains', value: 'pid=' }] },
       hints: ['`ss` с флагами t, u, l, p, n.', '`sudo ss -tulpn`'],
       solution: 'sudo ss -tulpn',
       tags: ['ss'],
@@ -47,7 +48,7 @@ const lesson: LessonDef = {
     {
       id: 'exporter',
       prompt: 'Prometheus с другого сервера не может собрать метрики с `node_exporter` (порт 9100). Посмотри, **на каком адресе** он слушает, и введи этот адрес (без порта).',
-      answer: { accept: ['127.0.0.1', 'localhost'], label: 'Адрес:' },
+      answer: { accept: ['127.0.0.1', 'localhost', 'loopback', '127.0.0.1:9100'], label: 'Адрес:' },
       hints: ['`sudo ss -tulpn | grep 9100`'],
       solution: 'sudo ss -tulpn | grep 9100',
       explanation: '`127.0.0.1` — доступен только с самого сервера. Отсюда и «не собирается снаружи».',
@@ -56,7 +57,7 @@ const lesson: LessonDef = {
     {
       id: 'danger',
       prompt: 'Аудит безопасности: какой сервис хранилища данных (не веб и не SSH) слушает на **всех интерфейсах** (`0.0.0.0`)? Введи номер порта.',
-      answer: { accept: ['6379'], normalize: 'number', label: 'Порт:' },
+      answer: { accept: ['6379', ':6379', '0.0.0.0:6379', '*:6379', 'порт 6379', 'redis 6379', '6379 redis', 'redis:6379', '6379/tcp', 'tcp/6379'], label: 'Порт:' },
       hints: ['Ищи строки с `0.0.0.0:` и исключи 22, 80, 443.'],
       solution: 'sudo ss -tulpn | grep 0.0.0.0',
       explanation: 'Redis на `0.0.0.0:6379` без пароля — классическая дыра. Его стоит повесить на 127.0.0.1/внутренний адрес и закрыть фаерволом.',
@@ -67,7 +68,7 @@ const lesson: LessonDef = {
     { id: 'q-flags', type: 'text', prompt: 'Что означает флаг `l` в `ss -tulpn`?', answer: { accept: [], normalize: 'keywords', keywords: [['listen', 'слуша']] }, explanation: '`-l` — только сокеты в состоянии LISTEN.' },
     { id: 'q-local', type: 'choice', prompt: 'Приложение слушает `127.0.0.1:8080`. Получится ли подключиться к нему с другого сервера напрямую?', options: ['Да, если открыт фаервол', 'Нет, только с этого же хоста (например, через nginx на нём)', 'Да, это стандартный адрес'], correct: 1, explanation: 'Loopback-адрес доступен только локально.' },
     { id: 'q-pg', type: 'text', prompt: 'Какой стандартный порт у PostgreSQL?', answer: { accept: ['5432'], normalize: 'number' }, explanation: '5432. MySQL — 3306, Redis — 6379.' },
-    { id: 'q-who80', type: 'command', prompt: 'Напиши команду (с пайпом), которая покажет, какой процесс слушает порт **443**.', scenario, solution: 'sudo ss -tulpn | grep :443', explanation: '`sudo ss -tulpn | grep :443` или `sudo lsof -i :443`.' },
+    { id: 'q-who80', type: 'command', prompt: 'Напиши команду (с пайпом), которая покажет, какой процесс слушает порт **443**.', scenario, solution: 'sudo ss -tulpn | grep :443', check: { type: 'all', checks: [{ type: 'outputContains', value: ['nginx', '1101', '443'] }, { type: 'outputNotContains', value: ['sshd', 'redis', 'postgres'] }] }, explanation: '`sudo ss -tulpn | grep :443` или `sudo lsof -i :443`. Без `sudo` колонка процесса для чужих сокетов пустая.' },
   ],
   glossary: [
     { ru: 'Сокет', en: 'socket', def: 'Конечная точка соединения: адрес + порт + протокол.' },

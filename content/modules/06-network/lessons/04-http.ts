@@ -39,7 +39,7 @@ const lesson: LessonDef = {
     {
       id: 'redirect',
       prompt: 'Куда перенаправляет `https://old.shop.kz/`? Введи URL из заголовка `Location`.',
-      answer: { accept: ['https://shop.kz/', 'https://shop.kz', 'shop.kz'], label: 'Location:' },
+      answer: { accept: ['https://shop.kz/', 'https://shop.kz', 'shop.kz', 'shop.kz/', 'Location: https://shop.kz/', 'Location: https://shop.kz'], label: 'Location:' },
       hints: ['`curl -I https://old.shop.kz/`'],
       solution: 'curl -I https://old.shop.kz/',
       tags: ['curl'],
@@ -47,7 +47,7 @@ const lesson: LessonDef = {
     {
       id: 'slow',
       prompt: 'Клиенты жалуются на медленную корзину. Измерь **общее время ответа** `https://shop.kz/api/cart` в секундах (`%{time_total}`) и введи значение (можно округлить до десятых).',
-      answer: { accept: ['2.35', '2.4', '2.3'], normalize: 'number', label: 'Секунд:' },
+      answer: { accept: ['2.35', '2.4', '2.3', '2350'], normalize: 'number', label: 'Секунд:' },
       hints: ['`curl -s -o /dev/null -w "%{time_total}" URL`'],
       solution: 'curl -s -o /dev/null -w "%{time_total}" https://shop.kz/api/cart',
       tags: ['curl'],

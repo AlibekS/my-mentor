@@ -19,7 +19,7 @@ const lesson: LessonDef = {
     {
       id: 'grep-q',
       prompt: 'Напиши условие одной строкой: если в `/var/log/app/app.log` есть `ERROR`, вывести `FOUND`, иначе `CLEAN`. Используй `if` и `grep -q`.',
-      check: { type: 'all', checks: [{ type: 'outputEquals', value: 'FOUND' }, { type: 'custom', fn: (_s, l) => !!l && /^if\s/.test(l.line) && /grep\s+-q/.test(l.line) && /else/.test(l.line) }] },
+      check: { type: 'all', checks: [{ type: 'outputEquals', value: 'FOUND' }, { type: 'custom', fn: (_s, l) => !!l && /^if\s/.test(l.line) && /grep\s+(?:-[A-Za-z]*q[A-Za-z]*|--quiet|--silent)(?:\s|$)/.test(l.line) && /\belse\b/.test(l.line) }] },
       hints: ['Шаблон: `if команда; then …; else …; fi`', '`if grep -q ERROR /var/log/app/app.log; then echo FOUND; else echo CLEAN; fi`'],
       solution: 'if grep -q ERROR /var/log/app/app.log; then echo FOUND; else echo CLEAN; fi',
     },
@@ -44,14 +44,14 @@ const lesson: LessonDef = {
     {
       id: 'file',
       prompt: 'Проверь, что конфиг `/etc/shop/app.conf` **существует и не пустой**, и выведи `config ok` (через `[ -s ... ] && echo ...`).',
-      check: { type: 'all', checks: [{ type: 'outputEquals', value: 'config ok' }, { type: 'custom', fn: (_s, l) => !!l && /\[\s+-s\s/.test(l.line) }] },
+      check: { type: 'all', checks: [{ type: 'outputEquals', value: 'config ok' }, { type: 'custom', fn: (_s, l) => !!l && /(?:\[|\btest)\s+-s\s/.test(l.line) }] },
       hints: ['`[ -s /etc/shop/app.conf ] && echo "config ok"`'],
       solution: '[ -s /etc/shop/app.conf ] && echo "config ok"',
     },
   ],
   quiz: [
     { id: 'q-if', type: 'choice', prompt: 'Что на самом деле проверяет `if`?', options: ['Булево значение true/false', 'Код выхода команды: 0 — условие выполнено', 'Наличие вывода у команды'], correct: 1, explanation: '`if cmd` → ветка then, если `cmd` вернула 0.' },
-    { id: 'q-gt', type: 'text', prompt: 'Каким оператором в `[ ]` проверить, что число `$N` больше 80?', answer: { accept: ['-gt'] }, explanation: '`[ "$N" -gt 80 ]`. `>` внутри `[ ]` — перенаправление.' },
+    { id: 'q-gt', type: 'text', prompt: 'Каким оператором в `[ ]` проверить, что число `$N` больше 80?', answer: { accept: [], normalize: 'keywords', keywords: [['-gt']] }, explanation: '`[ "$N" -gt 80 ]`. `>` внутри `[ ]` — перенаправление.' },
     { id: 'q-z', type: 'text', prompt: 'Каким флагом `test` проверить, что строка **пустая**?', answer: { accept: ['-z'] }, explanation: '`[ -z "$VAR" ]`; непустая — `-n`.' },
     { id: 'q-cmd', type: 'command', prompt: 'Однострочник: если сервис `nginx` активен — вывести `nginx up`.', scenario, solution: 'systemctl is-active nginx > /dev/null && echo "nginx up"', check: { type: 'outputEquals', value: 'nginx up' }, explanation: '`systemctl is-active nginx > /dev/null && echo "nginx up"` или через `if`.' },
   ],

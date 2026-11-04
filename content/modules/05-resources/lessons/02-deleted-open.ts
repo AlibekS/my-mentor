@@ -67,8 +67,17 @@ const lesson: LessonDef = {
   ],
   quiz: [
     { id: 'q-why', type: 'choice', prompt: 'Почему после `rm` активного лога место на диске не освободилось?', options: ['rm работает медленно', 'Процесс держит файл открытым: данные живут, пока он не закроет дескриптор', 'Нужно очистить корзину'], correct: 1, explanation: 'Имя удалено, inode с данными жив, пока есть открытые дескрипторы.' },
-    { id: 'q-lsof', type: 'text', prompt: 'Какой командой (с аргументом) найти удалённые, но открытые файлы?', answer: { accept: ['lsof +L1', 'sudo lsof +L1', 'lsof | grep deleted', 'sudo lsof | grep deleted'], normalize: 'exact' }, explanation: '`sudo lsof +L1` или `sudo lsof | grep deleted`.' },
-    { id: 'q-trunc', type: 'text', prompt: 'Как обнулить лог, не удаляя файл? (команда целиком для `/var/log/app.log`, без sudo)', answer: { accept: ['truncate -s 0 /var/log/app.log', ': > /var/log/app.log', '> /var/log/app.log', 'cat /dev/null > /var/log/app.log'], normalize: 'exact' }, explanation: '`truncate -s 0 файл` или `: > файл`.' },
+    { id: 'q-lsof', type: 'text', prompt: 'Какой командой (с аргументом) найти удалённые, но открытые файлы?', answer: { accept: [], normalize: 'keywords', keywords: [['lsof'], ['+l1', 'deleted']] }, explanation: '`sudo lsof +L1` или `sudo lsof | grep deleted`.' },
+    {
+      id: 'q-trunc',
+      type: 'command',
+      prompt: 'Обнули лог `/var/log/app.log`, не удаляя файл (файл твой, sudo не нужен).',
+      scenario: { files: { '/var/log/app.log': { content: '', size: 5 * 1024 ** 2, owner: 'alibek' } } },
+      solution: 'truncate -s 0 /var/log/app.log',
+      // файл на месте, размер 0, и его не удаляли/не пересоздавали
+      check: { type: 'custom', fn: (sh) => { const n = sh.fs.lookup('/var/log/app.log'); return !!n && n.type === 'file' && sh.fs.size(n) === 0 && !sh.log.some((r) => /\b(rm|mv|unlink)\b/.test(r.line)); } },
+      explanation: '`truncate -s 0 файл`, `: > файл` или `cat /dev/null > файл`. `echo > файл` оставит в файле перевод строки (1 байт).',
+    },
     { id: 'q-copytruncate', type: 'text', prompt: 'Какая опция logrotate копирует лог и обнуляет оригинал — для приложений, которые не умеют переоткрывать файл? (одно слово)', answer: { accept: ['copytruncate'] }, explanation: '`copytruncate`. Альтернатива — `postrotate` с reload сервиса.' },
   ],
   glossary: [

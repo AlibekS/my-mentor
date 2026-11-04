@@ -16,13 +16,13 @@ const lesson: LessonDef = {
     },
     {
       id: 'tx',
-      prompt: 'Отрепетируй исправление в **транзакции**: `BEGIN`, UPDATE этих заказов в `paid`, затем `SELECT COUNT(*)` заказов в статусе `pending` (чтобы увидеть эффект), затем `ROLLBACK`. Пиши всё одним скриптом через `;` — проверка смотрит на результат последнего SELECT.',
+      prompt: 'Отрепетируй исправление в **транзакции**: `BEGIN`, UPDATE этих заказов в `paid`, затем `SELECT COUNT(*)` заказов в статусе `pending` (чтобы увидеть эффект), затем `ROLLBACK`. Пиши всё одним скриптом через `;` (в SQLite транзакцию открывает `BEGIN;`, а не `START TRANSACTION`). Проверка смотрит на результат **последнего** SELECT в скрипте — поэтому SELECT после ROLLBACK в этот же скрипт не добавляй.',
       hints: [
         "UPDATE с подзапросом: `UPDATE orders SET status = 'paid' WHERE status = 'pending' AND id IN (SELECT order_id FROM payments WHERE status = 'succeeded');`",
         "Потом `SELECT COUNT(*) FROM orders WHERE status = 'pending';` и `ROLLBACK;`",
       ],
       solution: "BEGIN; UPDATE orders SET status = 'paid' WHERE status = 'pending' AND id IN (SELECT order_id FROM payments WHERE status = 'succeeded'); SELECT COUNT(*) FROM orders WHERE status = 'pending'; ROLLBACK;",
-      explanation: 'После ROLLBACK база вернулась в исходное состояние — проверь это отдельным SELECT. В реальности следующий шаг — change-тикет с этим скриптом и COMMIT после согласования.',
+      explanation: 'После ROLLBACK база вернулась в исходное состояние — убедись в этом отдельным запросом `SELECT COUNT(*) FROM orders WHERE status = \'pending\';`. В реальности следующий шаг — change-тикет с этим скриптом и COMMIT после согласования.',
     },
     {
       id: 'explain',

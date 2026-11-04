@@ -58,7 +58,7 @@ const lesson: LessonDef = {
     {
       id: 'webhook',
       prompt: 'Клиент: «перестали приходить вебхуки в нашу ERP». Посмотри `/v1/webhooks` (с токеном) и введи `last_error` вебхука.',
-      answer: { accept: ['410 Gone', '410'], label: 'last_error:' },
+      answer: { accept: ['410 Gone', '410', 'Gone', 'HTTP 410', 'HTTP 410 Gone'], label: 'last_error:' },
       hints: ["`curl -s -H \"Authorization: Bearer $TOKEN\" https://api.shop.kz/v1/webhooks | jq '.webhooks[0]'`"],
       solution: `curl -s -H "Authorization: Bearer $TOKEN" https://api.shop.kz/v1/webhooks | jq '.webhooks[0]'`,
       explanation: 'URL клиента отвечает **410 Gone** — эндпоинт на их стороне удалён, поэтому мы отключили вебхук (`active: false`). Решение — клиент обновляет URL и включает вебхук; наша проблема только в том, чтобы понятно это объяснить.',

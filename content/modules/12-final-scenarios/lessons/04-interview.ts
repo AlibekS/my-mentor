@@ -42,8 +42,8 @@ const lesson: LessonDef = {
           { label: 'Task с текстом', any: ['task[ \\t]*:[ \\t]*\\S.{10,}'] },
           { label: 'Action с текстом', any: ['action[ \\t]*:[ \\t]*\\S.{10,}'] },
           { label: 'Result с текстом', any: ['result[ \\t]*:[ \\t]*\\S.{10,}'] },
-          { label: 'от первого лица (I …)', any: ['\\bI (checked|found|rolled|identified|led|wrote|noticed|restored|ran|used|investigated|coordinated)'] },
-          { label: 'цифры в результате (минуты, %, кол-во)', any: ['\\d+\\s?(min|minutes|%|percent|hours|orders|customers|tickets)'] },
+          { label: 'от первого лица (I …)', any: ["\\bI('ve| have)?\\s+(\\w+ly\\s+)?([a-z]+ed|ran|saw|found|led|wrote|took|made|sent|built|got|did|was|began|spoke|told|set|put|kept)\\b"] },
+          { label: 'цифры в результате (минуты, %, кол-во)', any: ['\\d+\\s?(\\w+\\s)?(min|minutes|mins|%|percent|hours?|orders|customers|clients|tickets|users|emails|requests)\\b'] },
           { label: 'что изменили после (action items / prevention)', any: ['action item', 'postmortem', 'alert', 'runbook', 'prevent', 'since then'] },
         ],
       },
@@ -59,7 +59,7 @@ const lesson: LessonDef = {
         rubric: [
           { label: '502 упомянут', any: ['502'] },
           { label: '504 упомянут', any: ['504'] },
-          { label: '502 = ответ «сломанный» / ошибка', any: ['502[^.]*\\b(broken|invalid|error|bad|wrong|could ?n.t understand|failed)'] },
+          { label: '502 = ответ «сломанный» / ошибка', any: ['502[^.]*\\b(broken|invalid|error|bad|wrong|could ?n.t understand|failed|nonsense|garbled|no sense|unusable|confus|strange|unexpected|messed)', '\\b(broken|invalid|wrong|nonsense|garbled|unusable)\\b[^.]*502'] },
           { label: '504 = не ответил вовремя', any: ['504[^.]*\\b(time|too long|didn.t (answer|respond)|did not (answer|respond)|no answer|slow)'] },
           { label: 'аналогия', any: ['like', 'imagine', 'think of', 'as if'] },
           { label: 'без жаргона', none: ['upstream', 'proxy', 'gateway timeout', 'reverse'] },
@@ -72,7 +72,7 @@ const lesson: LessonDef = {
   quiz: [
     { id: 'q-star', type: 'text', prompt: 'Расшифруй STAR (четыре слова через запятую, англ.).', answer: { accept: [], normalize: 'keywords', keywords: [['situation'], ['task'], ['action'], ['result']] }, explanation: 'Situation, Task, Action, Result.' },
     { id: 'q-we', type: 'choice', prompt: 'Почему в части Action лучше говорить «I», а не «we»?', options: ['Так грамматически правильнее', 'Интервьюер оценивает твой личный вклад; «we» скрывает, что сделал именно ты', 'Это не важно'], correct: 1, explanation: 'Командная работа — хорошо, но важно, что делал ты.' },
-    { id: 'q-clarify', type: 'text', prompt: 'С какого шага (одно англ. слово) стоит начинать ответ на сценарный вопрос «сайт тормозит»?', answer: { accept: ['clarify', 'clarification', 'clarifying'] }, explanation: 'Сначала уточняющие вопросы: кто, с какого времени, что менялось.' },
+    { id: 'q-clarify', type: 'text', prompt: 'С какого шага (одно англ. слово) стоит начинать ответ на сценарный вопрос «сайт тормозит»?', answer: { accept: [], normalize: 'keywords', keywords: [['clarif', 'уточн']] }, explanation: 'Сначала уточняющие вопросы: кто, с какого времени, что менялось.' },
     { id: 'q-numbers', type: 'text', prompt: 'Чего обязательно не хватает в Result, если там написано «the issue was fixed»? (одно слово)', answer: { accept: [], normalize: 'keywords', keywords: [['цифр', 'метрик', 'numbers', 'metric', 'числ', 'impact', 'результат']] }, explanation: 'Цифр: за сколько восстановили, сколько клиентов, что улучшилось.' },
   ],
   glossary: [

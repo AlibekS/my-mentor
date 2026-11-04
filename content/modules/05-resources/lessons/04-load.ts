@@ -36,7 +36,7 @@ const lesson: LessonDef = {
     {
       id: 'wa',
       prompt: 'Load почти вдвое больше числа ядер. Посмотри `top`: какой показатель в строке `%Cpu(s)` аномально высокий? Введи его обозначение (две буквы).',
-      answer: { accept: ['wa', 'iowait'], label: 'Показатель:' },
+      answer: { accept: ['wa', 'iowait', '%wa', 'io wait', 'i/o wait', 'wa (iowait)', 'iowait (wa)'], label: 'Показатель:' },
       hints: ['`top` — строка `%Cpu(s)`: us, sy, id, wa…'],
       solution: 'top',
       explanation: '`wa` ~68% — процессы ждут диск, а не считают. Добавление CPU не поможет.',
@@ -54,8 +54,8 @@ const lesson: LessonDef = {
   ],
   quiz: [
     { id: 'q-load', type: 'choice', prompt: 'load average: 3.0, 3.1, 2.9 на сервере с 16 ядрами. Это…', options: ['Серьёзная перегрузка', 'Спокойная нагрузка — около 19% от числа ядер', 'Нельзя сказать без перезагрузки'], correct: 1, explanation: 'Load сравнивают с числом ядер.' },
-    { id: 'q-trend', type: 'text', prompt: 'load average: 1.20, 3.50, 6.00 — нагрузка растёт или снижается? (одно слово)', answer: { accept: ['снижается', 'падает', 'уменьшается', 'спадает', 'decreasing'] }, explanation: '1-минутное значение меньше 15-минутного — пик прошёл.' },
-    { id: 'q-st', type: 'text', prompt: 'В облачной VM в `top` высокий показатель, означающий, что гипервизор забирает CPU у твоей машины. Как он обозначается? (две буквы)', answer: { accept: ['st', 'steal'] }, explanation: '`st` (steal time) — проблема на уровне облака/типа инстанса.' },
+    { id: 'q-trend', type: 'text', prompt: 'load average: 1.20, 3.50, 6.00 — нагрузка растёт или снижается? (одно слово)', answer: { accept: [], normalize: 'keywords', keywords: [['сниж', 'пада', 'умень', 'спад', 'пониж', 'убыва', 'decreas', 'falling', 'down']] }, explanation: '1-минутное значение меньше 15-минутного — пик прошёл.' },
+    { id: 'q-st', type: 'text', prompt: 'В облачной VM в `top` высокий показатель, означающий, что гипервизор забирает CPU у твоей машины. Как он обозначается? (две буквы)', answer: { accept: ['st', 'steal', 'steal time', '%st', 'st (steal)'] }, explanation: '`st` (steal time) — проблема на уровне облака/типа инстанса.' },
     { id: 'q-nproc', type: 'command', prompt: 'Выведи число ядер CPU.', scenario, solution: 'nproc', explanation: '`nproc` (или `grep -c processor /proc/cpuinfo`).' },
   ],
   glossary: [

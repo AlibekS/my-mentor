@@ -43,7 +43,7 @@ const lesson: LessonDef = {
     {
       id: 'state',
       prompt: 'Оцени масштаб: выведи деплойменты namespace prod. Сколько подов `checkout` **готово** из желаемых? Введи в формате `X/Y`.',
-      answer: { accept: ['0/3'], label: 'READY:' },
+      answer: { accept: ['0/3', '0 / 3', '0 из 3', '0 of 3'], label: 'READY:' },
       hints: ['`kubectl get deploy -n prod` (namespace по умолчанию тут уже prod).'],
       solution: 'kubectl get deploy',
       tags: ['kubectl'],

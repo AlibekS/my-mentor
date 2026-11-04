@@ -33,7 +33,8 @@ const lesson: LessonDef = {
     {
       id: 'expired',
       prompt: 'Посмотри сертификат `partners.shop.kz` через `openssl s_client` и введи **дату окончания** (как в поле NotAfter, достаточно `Nov 1 2026` или `2026-11-01`).',
-      answer: { accept: [], normalize: 'keywords', keywords: [['nov  1', 'nov 1', '2026-11-01', '1 ноября', '01.11.2026']], label: 'NotAfter:' },
+      // день + месяц в любом привычном формате и год 2026 (NotBefore — Nov 1 2025, его не засчитываем)
+      answer: { accept: [], normalize: 'keywords', keywords: [['nov 1 2', 'nov 01 2', 'nov 1, 2', 'november 1 2', 'november 1, 2', '1 nov 2', '01 nov 2', '1 november 2', '2026-11-01', '01.11.2026', '1.11.2026', '01.11.26', '1 ноября', '1 ноя 2'], ['2026', '.11.26']], label: 'NotAfter:' },
       hints: ['`openssl s_client -connect partners.shop.kz:443 -servername partners.shop.kz`'],
       solution: 'openssl s_client -connect partners.shop.kz:443 -servername partners.shop.kz',
       tags: ['openssl'],
@@ -41,7 +42,7 @@ const lesson: LessonDef = {
     {
       id: 'soon',
       prompt: 'Проактивная проверка: у какого из сайтов (`shop.kz` или `status.shop.kz`) сертификат истекает **в ближайшие 30 дней**? Сегодня 4 ноября 2026. Введи имя.',
-      answer: { accept: ['status.shop.kz'], label: 'Сайт:' },
+      answer: { accept: ['status.shop.kz', 'status.shop.kz/', 'https://status.shop.kz', 'https://status.shop.kz/'], label: 'Сайт:' },
       hints: ['Проверь оба через `curl -v ... 2>&1 | grep expire` или openssl.'],
       solution: 'curl -v https://status.shop.kz/ 2>&1 | grep "expire date"\n# 18 ноября — через 14 дней',
       tags: ['curl'],
@@ -49,8 +50,8 @@ const lesson: LessonDef = {
   ],
   quiz: [
     { id: 'q-k', type: 'choice', prompt: 'Коллега предлагает добавить `-k` во все скрипты интеграции, «раз сертификат глючит». Что ответишь?', options: ['Отличная идея', '-k отключает проверку сертификата — допустимо только для диагностики; нужно перевыпустить/починить цепочку', '-k ускоряет запросы'], correct: 1, explanation: 'Отключение проверки открывает путь к атаке «человек посередине».' },
-    { id: 'q-sni', type: 'text', prompt: 'Какой флаг `openssl s_client` передаёт имя сайта (SNI), чтобы получить правильный сертификат на общем IP?', answer: { accept: ['-servername'] }, explanation: '`-servername api.shop.kz`.' },
-    { id: 'q-chain', type: 'text', prompt: 'Ошибка `unable to get local issuer certificate` чаще всего значит, что сервер не отдаёт … сертификат. (одно слово)', answer: { accept: ['промежуточный', 'intermediate', 'промежуточные'] }, explanation: 'Неполная цепочка: нужно отдавать fullchain (сервер + intermediate).' },
+    { id: 'q-sni', type: 'text', prompt: 'Какой флаг `openssl s_client` передаёт имя сайта (SNI), чтобы получить правильный сертификат на общем IP?', answer: { accept: [], normalize: 'keywords', keywords: [['servername']] }, explanation: '`-servername api.shop.kz`.' },
+    { id: 'q-chain', type: 'text', prompt: 'Ошибка `unable to get local issuer certificate` чаще всего значит, что сервер не отдаёт … сертификат. (одно слово)', answer: { accept: ['промежуточный', 'intermediate', 'промежуточные', 'промежуточного', 'промежуточный сертификат', 'intermediate certificate', 'intermediate ca'] }, explanation: 'Неполная цепочка: нужно отдавать fullchain (сервер + intermediate).' },
     { id: 'q-alert', type: 'text', prompt: 'Предложи профилактику, чтобы сертификаты не истекали внезапно (ключевые слова: мониторинг/алерт или автопродление).', answer: { accept: [], normalize: 'keywords', keywords: [['монитор', 'алерт', 'alert', 'автопродл', 'auto-renew', 'autorenew', 'certbot', 'cert-manager', 'напомина']] }, explanation: 'Алерт за 21/7/1 день и автопродление (certbot, cert-manager).' },
   ],
   glossary: [

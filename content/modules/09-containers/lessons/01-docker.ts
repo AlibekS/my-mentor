@@ -50,7 +50,7 @@ const lesson: LessonDef = {
     {
       id: 'xmx',
       prompt: 'Посмотри переменные окружения `api` через `docker inspect` (или `--format \'{{.Config.Env}}\'`). Какой размер heap задан в `JAVA_OPTS`? Введи значение (например `512m`).',
-      answer: { accept: ['512m', '-Xmx512m', '512'], label: 'Xmx:' },
+      answer: { accept: ['512m', '-Xmx512m', 'Xmx512m', '512', '512mb', '512 mb', '512мб', '512 мб'], label: 'Xmx:' },
       hints: ["`sudo docker inspect api --format '{{.Config.Env}}'`"],
       solution: "sudo docker inspect api --format '{{.Config.Env}}'",
       tags: ['docker'],
@@ -58,7 +58,7 @@ const lesson: LessonDef = {
     {
       id: 'worker',
       prompt: '`worker` постоянно перезапускается. Посмотри его последние логи и введи, к какому **адресу:порту** он не может подключиться.',
-      answer: { accept: ['127.0.0.1:6379', 'localhost:6379'], label: 'Адрес:' },
+      answer: { accept: ['127.0.0.1:6379', 'localhost:6379', 'redis://127.0.0.1:6379', 'redis://localhost:6379'], label: 'Адрес:' },
       hints: ['`sudo docker logs --tail 5 worker`'],
       solution: 'sudo docker logs --tail 5 worker',
       explanation: 'Внутри контейнера `127.0.0.1` — это сам контейнер, а не хост и не Redis. Нужно имя сервиса в docker-сети (`redis://redis:6379`). Частая ошибка при переносе конфигов в контейнеры.',
@@ -74,10 +74,10 @@ const lesson: LessonDef = {
     },
   ],
   quiz: [
-    { id: 'q-137', type: 'text', prompt: 'Контейнер в статусе `Exited (137)`. Каким сигналом его завершили? (имя или номер)', answer: { accept: ['SIGKILL', 'KILL', '9'] }, explanation: '137 = 128 + 9. Если `OOMKilled: true` — это лимит памяти.' },
-    { id: 'q-a', type: 'text', prompt: 'Какой флаг `docker ps` покажет и остановленные контейнеры?', answer: { accept: ['-a', '--all'] }, explanation: '`docker ps -a`.' },
+    { id: 'q-137', type: 'text', prompt: 'Контейнер в статусе `Exited (137)`. Каким сигналом его завершили? (имя или номер)', answer: { accept: ['SIGKILL', 'KILL', '9', 'SIGKILL 9', 'SIGKILL (9)', 'SIGKILL, 9', 'SIGKILL/9', '9 SIGKILL', '9 (SIGKILL)', 'kill -9', 'сигнал 9', 'signal 9', 'сигнал SIGKILL'] }, explanation: '137 = 128 + 9. Если `OOMKilled: true` — это лимит памяти.' },
+    { id: 'q-a', type: 'text', prompt: 'Какой флаг `docker ps` покажет и остановленные контейнеры?', answer: { accept: ['-a', '--all', 'docker ps -a', 'docker ps --all', 'sudo docker ps -a'] }, explanation: '`docker ps -a`.' },
     { id: 'q-localhost', type: 'choice', prompt: 'Приложение в контейнере пытается подключиться к Redis по `127.0.0.1:6379`, а Redis в соседнем контейнере. Почему не работает?', options: ['Redis выключен', '127.0.0.1 внутри контейнера — это сам контейнер; нужно имя сервиса в docker-сети', 'Порт 6379 запрещён в Docker'], correct: 1, explanation: 'В docker-compose/сети контейнеры видят друг друга по именам сервисов.' },
-    { id: 'q-logs', type: 'command', prompt: 'Выведи последние **2** строки логов контейнера `api`.', scenario, solution: 'sudo docker logs --tail 2 api', explanation: '`sudo docker logs --tail 2 api`.' },
+    { id: 'q-logs', type: 'command', prompt: 'Выведи последние **2** строки логов контейнера `api` (в тренажёре docker — через `sudo`).', scenario, solution: 'sudo docker logs --tail 2 api', explanation: '`sudo docker logs --tail 2 api`.' },
   ],
   glossary: [
     { ru: 'Образ', en: 'image', def: 'Неизменяемый шаблон файловой системы и настроек для запуска контейнера.' },

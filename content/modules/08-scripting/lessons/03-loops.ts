@@ -45,7 +45,7 @@ const lesson: LessonDef = {
     {
       id: 'endpoints',
       prompt: 'Файл `~/endpoints.txt` содержит пары `хост путь`. Прочитай его **построчно** (`while read`) и для каждой пары выведи `хост код`, где код — HTTP-статус `https://хост путь`.',
-      check: { type: 'all', checks: [{ type: 'outputContains', value: ['shop.kz 200', 'api.shop.kz 200', 'pay.shop.kz 503'] }, { type: 'custom', fn: (_s, l) => !!l && /while\s+read/.test(l.line) }] },
+      check: { type: 'all', checks: [{ type: 'outputContains', value: ['shop.kz 200', 'api.shop.kz 200', 'pay.shop.kz 503'] }, { type: 'custom', fn: (_s, l) => !!l && /while\s+(?:IFS=(?:"[^"]*"|'[^']*'|\S*)\s+)?read\b/.test(l.line) }] },
       hints: ['`while read -r host path; do …; done < ~/endpoints.txt`', 'Код: `$(curl -s -o /dev/null -w "%{http_code}" "https://$host$path")`'],
       solution: 'while read -r host path; do echo "$host $(curl -s -o /dev/null -w "%{http_code}" "https://$host$path")"; done < ~/endpoints.txt',
     },
