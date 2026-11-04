@@ -350,8 +350,9 @@ export function tokenize(line: string, env: Record<string, string>, opts: Expand
     if (c === '$') {
       i++;
       const v = expandVar();
-      // без кавычек результат делится на слова по пробелам/переводам строк (IFS)
-      if (/[ \t\n]/.test(v)) {
+      // без кавычек результат делится на слова по пробелам/переводам строк (IFS);
+      // кроме значения присваивания: X=$(cmd), local name=$1, export A=$B — как в bash
+      if (/[ \t\n]/.test(v) && !/^[A-Za-z_][A-Za-z0-9_]*=/.test(cur)) {
         const parts = v.split(/[ \t\n]+/);
         parts.forEach((p, k) => {
           if (k > 0) {

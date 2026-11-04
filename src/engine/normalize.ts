@@ -48,6 +48,7 @@ export function checkAnswer(input: string, spec: AnswerSpec): boolean {
  */
 function stripCommandName(input: string, accepted: string): string {
   if (!accepted.trim().startsWith('-')) return input;
-  const m = /^\s*(?:sudo\s+)?[a-z][\w.-]*\s+(-.*)$/i.exec(input);
+  // «grep -v», «docker ps -a», «kubectl logs --previous» — до двух слов (команда и подкоманда) перед флагом
+  const m = /^\s*(?:sudo\s+)?[a-z][\w.-]*(?:\s+[a-z][\w.-]*)?\s+(-.*)$/i.exec(input);
   return m ? m[1] : input;
 }

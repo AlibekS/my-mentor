@@ -501,6 +501,9 @@ describe('containers', () => {
     expect(s.run('for x in nginx mailer; do if systemctl is-active $x &>/dev/null; then echo "$x up"; else echo "$x down"; fi; done').stdout).toBe('nginx up\nmailer down\n');
     expect(s.run('f() { for a in "$@"; do echo "<$a>"; done; }; f "a b" c').stdout).toBe('<a b>\n<c>\n');
     expect(s.run('X=; echo [${X:+alt}]').stdout).toBe('[]\n');
+    // значение присваивания не делится на слова
+    expect(s.run('g() { local name=$1; echo "[$name]"; }; g "a b"').stdout).toBe('[a b]\n');
+    expect(s.run('OUT=$(printf "a b\\nc"); echo "$OUT"').stdout).toBe('a b\nc\n');
     s.run('printf \'#!/bin/bash\\nset -u\\nS=${1:?usage: svc NAME}\\necho ok $S\\n\' > ~/u.sh; chmod +x ~/u.sh');
     const r = s.run('./u.sh');
     expect(r.exitCode).toBe(1);

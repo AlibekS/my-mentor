@@ -17,6 +17,29 @@ const docker: CommandDef = {
     const [sub, ...rest] = args;
     if (ctx.user !== 'root' && !(ctx.fs.groups[ctx.user] ?? []).includes('docker') && sub && sub !== '--version' && sub !== 'version')
       return fail('permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock\n(Подсказка тренажёра: используй sudo docker …)');
+    // docker rmi / docker image rm: по id (в т.ч. sha256:…, префикс) или repo:tag
+    const rmImages = (refs: string[]) => {
+      const names = refs.filter((r) => !r.startsWith('-'));
+      if (!names.length) return fail('"docker rmi" requires at least 1 argument.');
+      let out = '';
+      let err = '';
+      for (const ref of names) {
+        const id = ref.replace(/^sha256:/, '');
+        const img = (st.images ?? []).find((i) => i.id.startsWith(id) || `${i.repo}:${i.tag}` === ref || (i.repo === ref && i.tag === 'latest'));
+        if (!img) {
+          err += `Error response from daemon: No such image: ${ref}\n`;
+          continue;
+        }
+        const used = cs.find((c) => c.image === `${img.repo}:${img.tag}` || c.image === img.repo);
+        if (used && !refs.includes('-f') && !refs.includes('--force')) {
+          err += `Error response from daemon: conflict: unable to remove repository reference "${ref}" (must force) - container ${used.id.slice(0, 12)} is using its referenced image ${img.id.slice(0, 12)}\n`;
+          continue;
+        }
+        st.images = (st.images ?? []).filter((i) => i !== img);
+        out += (img.dangling ? '' : `Untagged: ${img.repo}:${img.tag}\n`) + `Deleted: sha256:${img.id}\n`;
+      }
+      return { stdout: out, stderr: err, exitCode: err ? 1 : 0 };
+    };
     switch (sub) {
       case '--version':
       case 'version':
@@ -155,7 +178,11 @@ const docker: CommandDef = {
         }
         return fail(`docker system ${rest[0] ?? ''}: в тренажёре — df, prune -f`);
       }
+      case 'rmi':
+        return rmImages(rest);
       case 'image':
+        if (rest[0] === 'rm') return rmImages(rest.slice(1));
+        if (rest[0] === 'ls') return docker.run(['images', ...rest.slice(1)], _s, ctx);
         if (rest[0] === 'prune') {
           if (!rest.includes('-f') && !rest.includes('--force')) return fail('WARNING! This will remove all dangling images. (добавь -f)');
           const freed = (st.images ?? []).filter((i) => i.dangling).reduce((s, i) => s + i.sizeMb, 0);

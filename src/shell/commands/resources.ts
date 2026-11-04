@@ -27,6 +27,25 @@ const df: CommandDef = {
       disks = disks.filter((d) => chosen.has(d));
     }
     const fsType = (d: (typeof disks)[number]) => (d.fs === 'tmpfs' ? 'tmpfs' : 'ext4');
+    // df --output=pcent,target и т.п. — только выбранные колонки
+    const outArg = args.find((a) => a.startsWith('--output'));
+    if (outArg) {
+      const fields = (outArg.split('=')[1] ?? 'source,fstype,size,used,avail,pcent,target').split(',');
+      const g = (gb: number) => (h ? (gb >= 10 ? Math.round(gb) + 'G' : gb.toFixed(1) + 'G') : String(Math.round(gb * 1024 * 1024)));
+      const cols: Record<string, [string, (d: (typeof disks)[number]) => string]> = {
+        source: ['Filesystem', (d) => d.fs],
+        fstype: ['Type', (d) => fsType(d)],
+        size: [h ? 'Size' : '1K-blocks', (d) => g(d.sizeGb)],
+        used: ['Used', (d) => g(d.usedGb)],
+        avail: ['Avail', (d) => g(Math.max(0, d.sizeGb - d.usedGb))],
+        pcent: ['Use%', (d) => Math.round((d.usedGb / d.sizeGb) * 100) + '%'],
+        target: ['Mounted on', (d) => d.mount],
+        ipcent: ['IUse%', (d) => (d.inodesFull ? '100%' : '13%')],
+      };
+      const bad = fields.find((f) => !cols[f]);
+      if (bad) return fail(`df: option --output: field '${bad}' unknown`);
+      return ok(joinLines([fields.map((f) => cols[f][0]).join(' '), ...disks.map((d) => fields.map((f) => cols[f][1](d).padStart(cols[f][0].length)).join(' '))]));
+    }
     if (typeCol) {
       const fmtT = (gb: number) => (h ? (gb >= 10 ? Math.round(gb) + 'G' : gb.toFixed(1) + 'G') : String(Math.round(gb * 1024 * 1024)));
       return ok(`Filesystem     Type   ${h ? ' Size  Used Avail' : ' 1K-blocks      Used Available'} Use% Mounted on\n` + joinLines(disks.map((d) => `${d.fs.padEnd(15)}${fsType(d).padEnd(6)} ${fmtT(d.sizeGb).padStart(h ? 5 : 10)} ${fmtT(d.usedGb).padStart(h ? 5 : 10)} ${fmtT(Math.max(0, d.sizeGb - d.usedGb)).padStart(h ? 5 : 10)} ${(Math.round((d.usedGb / d.sizeGb) * 100) + '%').padStart(4)} ${d.mount}`)));
