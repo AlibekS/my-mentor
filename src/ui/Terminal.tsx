@@ -43,7 +43,8 @@ export function Terminal({ shell, onExec, banner, autoFocus }: Props) {
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     const term = new XTerm({
       fontFamily: '"JetBrains Mono", "Fira Code", ui-monospace, Menlo, Consolas, monospace',
-      fontSize: 14,
+      // крупнее на больших экранах — в тон к размеру шрифта страницы
+      fontSize: Math.round(parseFloat(getComputedStyle(document.documentElement).fontSize || '16') * 0.88),
       lineHeight: 1.25,
       cursorBlink: !reduce,
       theme: THEME,
