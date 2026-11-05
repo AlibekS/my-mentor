@@ -28,7 +28,8 @@ let statusCache: { available: boolean; detail: string; at: number } | null = nul
 function resolveBin(): { path: string; shell: boolean } {
   if (process.platform !== 'win32') return { path: BIN, shell: false };
   if (/[\\/]/.test(BIN) || /\.(exe|cmd|bat)$/i.test(BIN)) return { path: BIN, shell: /\.(cmd|bat)$/i.test(BIN) };
-  const dirs = (process.env.PATH ?? '').split(delimiter).filter(Boolean);
+  // нативный установщик кладёт claude.exe в %USERPROFILE%\.local\bin, но не всегда добавляет её в PATH
+  const dirs = [...(process.env.PATH ?? '').split(delimiter).filter(Boolean), ...(process.env.USERPROFILE ? [join(process.env.USERPROFILE, '.local', 'bin')] : [])];
   for (const ext of ['.exe', '.cmd', '.bat']) {
     for (const d of dirs) {
       const full = join(d, BIN + ext);
