@@ -235,7 +235,7 @@ const nc: CommandDef = {
     });
     const refused = eps.length > 0 && eps.every(([, e]) => e.error === 'refused');
     // reachable:false в сценарии — про ICMP (ping); TCP решают HTTP-эндпоинты. Без эндпоинтов — недоступен
-    const tmo = (eps.length > 0 && eps.every(([, e]) => e.error === 'timeout')) || (!eps.length && h.reachable === false);
+    const tmo = (eps.length > 0 && eps.every(([, e]) => e.error === 'timeout')) || (!eps.length && h.reachable === false) || ('mismatch' in res && !!res.mismatch);
     const ip = res.ip;
     if (refused || (!eps.length && !scheme && !tmo)) return { stdout: '', stderr: v ? `nc: connect to ${host} (${ip}) port ${port} (tcp) failed: Connection refused\n` : '', exitCode: 1 };
     if (tmo) return { stdout: '', stderr: v ? `nc: connect to ${host} (${ip}) port ${port} (tcp) timed out: Operation now in progress\n` : '', exitCode: 1 };

@@ -25,5 +25,8 @@ describe('sql engine', () => {
     const bad = await gradeSql(ds, 'SELECT name, v FROM t', 'SELECT name FROM t');
     expect(bad.ok).toBe(false);
     expect(bad.reason).toContain('столбцов');
+    // порядок столбцов не важен
+    expect((await gradeSql(ds, 'SELECT v, name FROM t', 'SELECT name, v FROM t')).ok).toBe(true);
+    expect((await gradeSql(ds, 'SELECT v, id FROM t', 'SELECT name, v FROM t')).ok).toBe(false);
   });
 });

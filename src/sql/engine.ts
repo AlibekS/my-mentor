@@ -82,14 +82,27 @@ export function compareResults(student: QueryResult, expected: QueryResult, orde
   if (student.columns.length !== expected.columns.length)
     return { ok: false, reason: `Ожидалось столбцов: ${expected.columns.length}, у тебя: ${student.columns.length}.` };
   if (student.rows.length !== expected.rows.length) return { ok: false, reason: `Ожидалось строк: ${expected.rows.length}, у тебя: ${student.rows.length}.` };
-  const a = student.rows.map((r) => r.map(norm).join('\u0001'));
   const b = expected.rows.map((r) => r.map(norm).join('\u0001'));
-  if (!ordered) {
-    a.sort();
-    b.sort();
-  }
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return { ok: false, reason: ordered ? 'Данные или порядок строк не совпадают.' : 'Данные не совпадают.' };
-  return { ok: true };
+  if (!ordered) b.sort();
+  const same = (perm: number[]) => {
+    const a = student.rows.map((r) => perm.map((k) => norm(r[k])).join('\u0001'));
+    if (!ordered) a.sort();
+    return a.every((x, i) => x === b[i]);
+  };
+  const n = student.columns.length;
+  const identity = [...Array(n).keys()];
+  if (same(identity)) return { ok: true };
+  // порядок столбцов не важен: SELECT country, email = SELECT email, country
+  const key = (c: string) => c.toLowerCase().replace(/^.*\./, '');
+  const byName = expected.columns.map((c) => student.columns.findIndex((x) => key(x) === key(c)));
+  if (byName.every((k) => k >= 0) && new Set(byName).size === n && same(byName)) return { ok: true };
+  if (n <= 5) for (const perm of permutations(identity)) if (same(perm)) return { ok: true };
+  return { ok: false, reason: ordered ? 'Данные или порядок строк не совпадают.' : 'Данные не совпадают.' };
+}
+
+function permutations(xs: number[]): number[][] {
+  if (xs.length <= 1) return [xs];
+  return xs.flatMap((x, i) => permutations([...xs.slice(0, i), ...xs.slice(i + 1)]).map((p) => [x, ...p]));
 }
 
 /** Проверка: оба запроса выполняются на свежих копиях БД */

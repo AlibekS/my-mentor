@@ -521,3 +521,4 @@ input:focus, textarea:focus { border-color: var(--cyan); outline: none; box-shad
 .track-switch { display: inline-flex; border: 1px solid var(--line); border-radius: 99px; overflow: hidden; margin-left: 4px; }
 .track-switch button { background: transparent; color: var(--muted); border: 0; padding: 4px 12px; font: inherit; font-size: 0.85rem; cursor: pointer; }
 .track-switch button.active { background: linear-gradient(135deg, var(--cyan), var(--magenta)); color: #05060c; font-weight: 700; }
+.dt-sort { background: none; border: 0; color: inherit; font: inherit; font-weight: 600; cursor: pointer; padding: 0; }

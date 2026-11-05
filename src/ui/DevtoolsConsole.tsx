@@ -39,6 +39,8 @@ export function DevtoolsConsole({ ds, onAction }: { ds: DevtoolsDataset; onActio
   const [sel, setSel] = useState<number | null>(null);
   const [detail, setDetail] = useState<Detail>('headers');
   const [levels, setLevels] = useState<'all' | 'errors'>('all');
+  const [sort, setSort] = useState<{ key: 'name' | 'status' | 'size' | 'time' | 'start'; desc: boolean }>({ key: 'start', desc: false });
+  const [cfilter, setCfilter] = useState('');
 
   const rows = useMemo(
     () =>
@@ -51,9 +53,18 @@ export function DevtoolsConsole({ ds, onAction }: { ds: DevtoolsDataset; onActio
           if (kind === 'js') return r.type === 'script';
           if (kind === 'errors') return r.status >= 400 || r.status === 0;
           return true;
+        })
+        .sort((a, b) => {
+          const v = (x: NetRequest, i: number) => (sort.key === 'name' ? nameOf(x) : sort.key === 'status' ? x.status : sort.key === 'size' ? x.size ?? 0 : sort.key === 'time' ? x.timeMs : x.startMs ?? i);
+          const va = v(a.r, a.i);
+          const vb = v(b.r, b.i);
+          const c = typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb));
+          return sort.desc ? -c : c;
         }),
-    [ds.requests, filter, kind],
+    [ds.requests, filter, kind, sort],
   );
+  const sortBy = (key: typeof sort.key) => setSort((s0) => ({ key, desc: s0.key === key ? !s0.desc : key === 'time' || key === 'size' }));
+  const arrow = (key: typeof sort.key) => (sort.key === key ? (sort.desc ? ' ▼' : ' ▲') : '');
   const cur = sel !== null ? ds.requests[sel] : null;
   const totalMs = Math.max(1, ...ds.requests.map((r) => (r.startMs ?? 0) + r.timeMs));
   const errors = (ds.console ?? []).filter((m) => m.level === 'error').length;
@@ -93,7 +104,14 @@ export function DevtoolsConsole({ ds, onAction }: { ds: DevtoolsDataset; onActio
           <div className="table-wrap dt-table-wrap">
             <table className="table dt-table">
               <thead>
-                <tr><th>Name</th><th>Status</th><th>Method</th><th>Type</th><th>Size</th><th>Time</th><th className="dt-wf">Waterfall</th></tr>
+                <tr>
+                  <th><button className="dt-sort" onClick={() => sortBy('name')}>Name{arrow('name')}</button></th>
+                  <th><button className="dt-sort" onClick={() => sortBy('status')}>Status{arrow('status')}</button></th>
+                  <th>Method</th><th>Type</th>
+                  <th><button className="dt-sort" onClick={() => sortBy('size')}>Size{arrow('size')}</button></th>
+                  <th><button className="dt-sort" onClick={() => sortBy('time')}>Time{arrow('time')}</button></th>
+                  <th className="dt-wf"><button className="dt-sort" onClick={() => sortBy('start')}>Waterfall{arrow('start')}</button></th>
+                </tr>
               </thead>
               <tbody>
                 {rows.map(({ r, i }) => {
@@ -158,7 +176,8 @@ export function DevtoolsConsole({ ds, onAction }: { ds: DevtoolsDataset; onActio
             <button className={`seg-item ${levels === 'all' ? 'sel' : ''}`} onClick={() => setLevels('all')} aria-pressed={levels === 'all'}>Все уровни</button>
             <button className={`seg-item ${levels === 'errors' ? 'sel' : ''}`} onClick={() => setLevels('errors')} aria-pressed={levels === 'errors'}>Только ошибки</button>
           </div>
-          {(ds.console ?? []).filter((m) => levels === 'all' || m.level === 'error').map((m, i) => (
+          <input value={cfilter} onChange={(e) => setCfilter(e.target.value)} placeholder="Фильтр сообщений" aria-label="Фильтр консоли" />
+          {(ds.console ?? []).filter((m) => (levels === 'all' || m.level === 'error') && (!cfilter || (m.text + ' ' + (m.source ?? '')).toLowerCase().includes(cfilter.toLowerCase()))).map((m, i) => (
             <div key={i} className={`dt-msg dt-${m.level}`}>
               <span className="dt-msg-text mono">{m.level === 'error' ? '⛔ ' : m.level === 'warn' ? '⚠ ' : ''}{m.text}</span>
               {m.source && <span className="dt-src mono">{m.source}</span>}

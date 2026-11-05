@@ -14,7 +14,17 @@ export function normCommand(s: string): string {
   return s.replace(/\s+/g, ' ').replace(/\s*\|\s*/g, ' | ').trim();
 }
 
+const WORD_NUMS: Record<string, number> = {
+  zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12,
+  ноль: 0, один: 1, одна: 1, одно: 1, два: 2, две: 2, три: 3, четыре: 4, пять: 5, шесть: 6, семь: 7, восемь: 8, девять: 9, десять: 10,
+};
+
 export function parseNumber(s: string): number | null {
+  // «four», «три» — число словами (если цифр нет)
+  if (!/\d/.test(s)) {
+    const w = s.toLowerCase().match(/[a-zа-яё]+/g)?.find((x) => x in WORD_NUMS);
+    return w !== undefined ? WORD_NUMS[w] : null;
+  }
   // «0.0.0.0:6379», «127.0.0.1:8081» — ответом считается порт
   const ipPort = /\b\d{1,3}(?:\.\d{1,3}){3}:(\d+)\b/.exec(s);
   if (ipPort) return parseFloat(ipPort[1]);
@@ -22,8 +32,8 @@ export function parseNumber(s: string): number | null {
   const eq = s.lastIndexOf('=');
   if (eq >= 0 && /\d/.test(s.slice(eq + 1))) s = s.slice(eq + 1);
   // «1 234» → 1234; число, приклеенное к букве (p95, HTTP2, v1), — часть названия, а не ответ
-  const t = s.replace(/(\d)\s+(?=\d{3}(?!\d))/g, '$1');
-  const m = /(?<![A-Za-zА-Яа-яЁё_\d.])-?\d+(?:[.,]\d+)?/.exec(t) ?? /-?\d+(?:[.,]\d+)?/.exec(t);
+  const t = s.replace(/(?<![\d.,])(\d{1,3})\s(?=\d{3}(?!\d))/g, '$1');
+  const m = /(?<![A-Za-zА-Яа-яЁё_\d./])-?\d+(?:[.,]\d+)?/.exec(t) ?? /-?\d+(?:[.,]\d+)?/.exec(t);
   return m ? parseFloat(m[0].replace(',', '.')) : null;
 }
 

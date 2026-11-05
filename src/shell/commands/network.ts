@@ -25,7 +25,8 @@ export function resolveHost(ctx: Ctx, name: string) {
     const dns = ctx.state.network.hosts[name];
     // запись в /etc/hosts указывает не туда, куда DNS — узел по этому адресу может не отвечать
     const host = byIp ?? (dns && dns.ip === fromHosts ? dns : { ip: fromHosts, reachable: dns ? dns.ip === fromHosts : true, latencyMs: 1 });
-    return { ip: fromHosts, host: { ...host, ip: fromHosts } };
+    // mismatch: /etc/hosts ведёт на адрес, где нашего сервиса нет (не DNS-адрес и не известный узел)
+    return { ip: fromHosts, host: { ...host, ip: fromHosts }, mismatch: !!dns?.ip && dns.ip !== fromHosts && !byIp };
   }
   const h = ctx.state.network.hosts[name];
   if (!h || !h.ip) return null;
@@ -290,6 +291,8 @@ const curl: CommandDef = {
       return { stdout: '', stderr: `curl: (6) Could not resolve host: ${host}\n`, exitCode: 6 };
     }
     verbose += `*   Trying ${r.ip}:${port}...\n`;
+    // /etc/hosts подменил адрес — запрос уходит не на наш сервер
+    if ('mismatch' in r && r.mismatch) ep = { status: 0, error: 'timeout', timeMs: 10000 };
     if (!ep) {
       // локальный сервис слушает порт?
       const listening = (host === 'localhost' || host === '127.0.0.1') && ctx.state.listeners.some((l) => l.local.endsWith(':' + port));
@@ -350,7 +353,7 @@ const curl: CommandDef = {
       }
     }
     let stdout = flags.has('I') ? headText : flags.has('i') ? headText + (ep.body ?? '') : ep.body ?? '';
-    if (dumpHeaders === '-' || dumpHeaders === '/dev/stdout') stdout = headText + stdout;
+    const dumpToStdout = dumpHeaders === '-' || dumpHeaders === '/dev/stdout';
     const t = (ep.timeMs ?? 42) / 1000;
     if (writeOut)
       stdout += writeOut
@@ -368,6 +371,8 @@ const curl: CommandDef = {
       if (outFile !== '/dev/null') ctx.fs.write(outFile.startsWith('/') ? outFile : ctx.cwd + '/' + outFile, ep.body ?? '', ctx.user);
       stdout = writeOut ? stdout.slice((ep.body ?? '').length) : '';
     }
+    // -D - : заголовки в stdout даже вместе с -o файл
+    if (dumpToStdout) stdout = headText + stdout;
     const exitCode = flags.has('f') && status >= 400 ? 22 : 0;
     return { stdout, stderr: v ? verbose : exitCode ? `curl: (22) The requested URL returned error: ${status}\n` : '', exitCode };
   },

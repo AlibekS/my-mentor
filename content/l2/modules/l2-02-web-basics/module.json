@@ -1,0 +1,31 @@
+{
+  "id": "l2-02-web-basics",
+  "order": 2,
+  "title": "Как устроен веб-сервис",
+  "titleEn": "How Web Services Work",
+  "short": "Клиент и сервер, URL по частям, DNS (dig, nslookup), HTTP-методы, статус-коды, заголовки, curl, JSON и jq.",
+  "description": "Что происходит, когда клиент открывает магазин или вызывает API: из каких частей состоит адрес, как DNS превращает имя в IP, что такое запрос и ответ, о чём говорят коды 2xx/3xx/4xx/5xx и заголовки. Главный инструмент — curl: проверить сайт самому, получить код ответа, заголовки, request id и JSON, чтобы приложить факты к тикету.",
+  "icon": "🌍",
+  "importance": 5,
+  "requires": [],
+  "skills": [
+    "разбираю URL на части: протокол, домен, порт, путь, параметры",
+    "проверяю DNS-имя командой dig и понимаю NXDOMAIN и CNAME",
+    "получаю код ответа и заголовки через curl -I и -w '%{http_code}'",
+    "отличаю 4xx (ошибка запроса) от 5xx (ошибка сервера)",
+    "отправляю GET и POST и достаю поле из JSON через jq"
+  ],
+  "topics": [
+    "Клиент, сервер, URL",
+    "DNS: dig, nslookup, NXDOMAIN, CNAME",
+    "HTTP-статус-коды и curl",
+    "Заголовки: Location, Retry-After, Cache-Control, X-Request-Id",
+    "Методы GET/POST, JSON и jq"
+  ],
+  "reviewedAt": "2026-11-05",
+  "demand": "rising",
+  "marketNote": "В вакансиях SaaS-поддержки L2 постоянно встречаются HTTP/REST, коды ответов, DNS, Postman/cURL и JSON — без этого не разобрать ни «сайт не открывается», ни интеграцию по API.",
+  "status": "ready",
+  "estimatedMinutes": 140,
+  "feedsL3": { "06-network": 15 }
+}
