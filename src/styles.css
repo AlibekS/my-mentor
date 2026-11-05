@@ -482,3 +482,42 @@ input:focus, textarea:focus { border-color: var(--cyan); outline: none; box-shad
 .tool-panes { display: grid; gap: 8px; min-width: 0; }
 .tool-pane { min-width: 0; }
 .tool-pane[hidden] { display: none; }
+
+/* ---------- DevTools-тренажёр ---------- */
+.devtools { display: grid; gap: 10px; }
+.dt-page { background: var(--card2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; }
+.dt-url { font-family: var(--mono); font-size: 0.85rem; color: var(--muted); }
+.dt-screen { margin: 6px 0 0; }
+.dt-toolbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.dt-toolbar input { flex: 1 1 14rem; min-width: 0; }
+.dt-table-wrap { max-height: 22rem; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+.dt-table { font-size: 0.85rem; }
+.dt-table th { position: sticky; top: 0; background: var(--card2); }
+.dt-table td { white-space: nowrap; max-width: 18rem; overflow: hidden; text-overflow: ellipsis; }
+.dt-table tbody tr { cursor: pointer; }
+.dt-table tbody tr:hover, .dt-table tbody tr:focus-visible { background: var(--card2); }
+.dt-table tr.dt-bad td { color: var(--red); }
+.dt-table tr.dt-sel { outline: 1px solid var(--cyan); }
+.dt-wf { width: 22%; min-width: 6rem; }
+.dt-bar { display: block; height: 8px; border-radius: 3px; background: var(--cyan); opacity: 0.7; }
+.dt-bad .dt-bar { background: var(--red); }
+.dt-badge { font-size: 0.72rem; padding: 0 6px; border-radius: 99px; margin-left: 4px; }
+.dt-badge.err { background: var(--red); color: #fff; }
+.dt-badge.warn { background: var(--amber); color: #111; }
+.dt-detail { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: grid; gap: 8px; }
+.dt-headers h4, .dt-app h4 { margin: 8px 0 4px; font-size: 0.9rem; color: var(--cyan); }
+.dt-headers dl, .dt-timing { display: grid; grid-template-columns: max-content 1fr; gap: 2px 14px; margin: 0; font-size: 0.85rem; }
+.dt-headers dl > div, .dt-timing > div { display: contents; }
+.dt-headers dt, .dt-timing dt { color: var(--muted); }
+.dt-headers dd, .dt-timing dd { margin: 0; overflow-wrap: anywhere; }
+.dt-pre { background: #07080f; color: #d7e0f5; padding: 10px 12px; border-radius: 8px; max-height: 20rem; overflow: auto; font-size: 0.82rem; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; }
+.dt-console { display: grid; gap: 6px; }
+.dt-msg { border-bottom: 1px solid var(--line); padding: 6px 4px; display: grid; gap: 2px; font-size: 0.85rem; }
+.dt-msg.dt-error { background: color-mix(in srgb, var(--red) 10%, transparent); }
+.dt-msg.dt-warn { background: color-mix(in srgb, var(--amber) 10%, transparent); }
+.dt-src { color: var(--muted); font-size: 0.75rem; justify-self: end; }
+.dt-stack { margin: 0; font-size: 0.75rem; color: var(--muted); white-space: pre-wrap; }
+.dt-val { max-width: 20rem; overflow-wrap: anywhere; white-space: normal; }
+.track-switch { display: inline-flex; border: 1px solid var(--line); border-radius: 99px; overflow: hidden; margin-left: 4px; }
+.track-switch button { background: transparent; color: var(--muted); border: 0; padding: 4px 12px; font: inherit; font-size: 0.85rem; cursor: pointer; }
+.track-switch button.active { background: linear-gradient(135deg, var(--cyan), var(--magenta)); color: #05060c; font-weight: 700; }

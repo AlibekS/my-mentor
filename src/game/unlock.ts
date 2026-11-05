@@ -1,11 +1,11 @@
 import type { Lesson, Module } from '../content/types';
-import type { PlanItem, Progress } from './progress';
+import { planItemOf, type PlanItem, type Progress } from './progress';
 
 export type ModuleState = 'done' | 'open' | 'locked' | 'soon';
 export type LessonState = 'done' | 'open' | 'locked' | 'skippable';
 
 export function planItem(p: Progress, moduleId: string): PlanItem | undefined {
-  return p.plan?.items.find((i) => i.moduleId === moduleId);
+  return planItemOf(p, moduleId);
 }
 
 export function isModuleDone(m: Module, p: Progress): boolean {
@@ -14,9 +14,11 @@ export function isModuleDone(m: Module, p: Progress): boolean {
 
 /** Модули в порядке персональной программы (или по умолчанию) */
 export function orderedModules(mods: Module[], p: Progress): Module[] {
-  if (!p.plan) return mods;
+  // программа того трека, к которому относятся модули
+  const plan = mods[0]?.track === 'l2' ? p.l2Plan : p.plan;
+  if (!plan) return mods;
   const byId = new Map(mods.map((m) => [m.id, m]));
-  const res = p.plan.items.map((i) => byId.get(i.moduleId)).filter((m): m is Module => !!m);
+  const res = plan.items.map((i) => byId.get(i.moduleId)).filter((m): m is Module => !!m);
   for (const m of mods) if (!res.includes(m)) res.push(m);
   return res;
 }

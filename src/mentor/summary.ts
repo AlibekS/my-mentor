@@ -1,4 +1,5 @@
-import { modules, lessonByKey } from '../content';
+import { lessonByKey, modulesOf } from '../content';
+import { currentTrack } from '../game/tracks';
 import { levelFromXp, rankForLevel } from '../game/levels';
 import { masteryView, overallReadiness } from '../game/mastery';
 import type { Progress } from '../game/progress';
@@ -15,9 +16,12 @@ export function progressSummary(p: Progress) {
   const weak = Object.values(p.review)
     .slice(0, 8)
     .map((r) => `${lessonByKey.get(r.lessonKey)?.title ?? r.lessonKey} (${r.kind === 'task' ? 'задание' : 'вопрос'} ${r.itemId}, ошибок ${r.lapses + 1})`);
+  const track = currentTrack(p);
+  const modules = modulesOf(track);
   const next = nextLesson(modules, p);
   return {
     name: p.profile.name,
+    track: track === 'l2' ? 'L2 Quest (уровень L1→L2: объясняй проще, без жаргона; английский — постепенно)' : 'L3 Quest',
     level,
     rank: rankForLevel(level).title,
     xp: p.xp,

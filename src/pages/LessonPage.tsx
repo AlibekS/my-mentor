@@ -16,6 +16,7 @@ import { Markdown } from '../ui/Markdown';
 import { QuestionCard } from '../ui/QuestionCard';
 import { Terminal } from '../ui/Terminal';
 import { WriteBox } from '../ui/WriteBox';
+import { DevtoolsConsole } from '../ui/DevtoolsConsole';
 import { SqlConsole } from '../ui/SqlConsole';
 import { ObsConsole, type ObsKind } from '../ui/ObsConsole';
 import { evalQuery, sameResult } from '../obs/promql';
@@ -154,7 +155,7 @@ function TheoryStep({ module, lesson, base }: { module: Module; lesson: Lesson; 
           </div>
         </section>
         <section className={`pane term ${tab === 'term' ? 'show' : ''}`}>
-          <div className="term-title">Песочница — пробуй {lesson.sql ? 'запросы' : 'команды'} из теории. Здесь ничего не проверяется.</div>
+          <div className="term-title">Песочница — {lesson.devtools ? 'изучи, что видит браузер клиента' : `пробуй ${lesson.sql ? 'запросы' : 'команды'} из теории`}. Здесь ничего не проверяется.</div>
           <ToolPanes
             lesson={lesson}
             active={lessonTools(lesson)[0]}
@@ -168,14 +169,14 @@ function TheoryStep({ module, lesson, base }: { module: Module; lesson: Lesson; 
   );
 }
 
-const TOOL_LABEL: Record<Tool, string> = { terminal: '⌨ Терминал', sql: '🗄 SQL', obs: '🔭 Наблюдаемость' };
+const TOOL_LABEL: Record<Tool, string> = { terminal: '⌨ Терминал', sql: '🗄 SQL', obs: '🔭 Наблюдаемость', devtools: '🧭 DevTools' };
 
 /** Правая панель урока: один или несколько инструментов (вкладки). Все остаются смонтированными — состояние не теряется. */
 function ToolPanes({ lesson, active, terminal, sql, obs }: { lesson: Lesson; active: Tool; terminal: React.ReactNode; sql?: React.ReactNode; obs?: React.ReactNode }) {
   const tools = lessonTools(lesson);
   const [cur, setCur] = useState<Tool>(active);
   useEffect(() => setCur(active), [active]);
-  const node = { terminal, sql, obs };
+  const node: Record<Tool, React.ReactNode> = { terminal, sql, obs, devtools: lesson.devtools && <DevtoolsConsole ds={lesson.devtools} onAction={(what) => mentorContext.set((c) => ({ ...c, terminal: [...(c.terminal ?? []).slice(-7), { line: `[DevTools] ${what}`, output: '', exitCode: 0 }] }))} /> };
   if (tools.length === 1) return <>{node[tools[0]]}</>;
   return (
     <div className="tool-panes">

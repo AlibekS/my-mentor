@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { modules } from '../content';
+import { currentTrack, TRACK_INFO, trackModules, trackPlan } from '../game/tracks';
 import { finalizePlan, moduleMinutes, planMode } from '../game/placement';
 import type { PlanItem } from '../game/progress';
 import { mentorContext } from '../mentor/context';
@@ -16,7 +16,9 @@ const SELF_LABEL: Record<string, string> = { none: 'не знаю', heard: 'сл
 
 export function PlanView() {
   const { progress, update } = useStore();
-  const plan = progress.plan;
+  const track = currentTrack(progress);
+  const modules = trackModules(progress);
+  const plan = trackPlan(progress);
   useEffect(() => mentorContext.set({ page: 'plan' }), []);
   if (!plan) {
     return (
@@ -26,11 +28,13 @@ export function PlanView() {
       </div>
     );
   }
-  const results = progress.onboarding.results ?? [];
+  const results = track === 'l3' ? progress.onboarding.results ?? [] : [];
   const edit = (fn: (items: PlanItem[]) => PlanItem[]) =>
     update((p) => {
-      const items = fn(structuredClone(p.plan!.items));
-      p.plan = { ...finalizePlan(modules, items, p.plan!.minutesPerDay, p.plan!.targetDate), createdAt: p.plan!.createdAt };
+      const cur = (track === 'l2' ? p.l2Plan : p.plan)!;
+      const next = { ...finalizePlan(modules, fn(structuredClone(cur.items)), cur.minutesPerDay, cur.targetDate), createdAt: cur.createdAt };
+      if (track === 'l2') p.l2Plan = next;
+      else p.plan = next;
     });
   const move = (i: number, d: -1 | 1) => edit((items) => {
     const j = i + d;
@@ -49,7 +53,7 @@ export function PlanView() {
   const late = plan.targetDate && eta > new Date(plan.targetDate);
   return (
     <div className="page plan">
-      <h1>Твоя программа</h1>
+      <h1>Твоя программа · {TRACK_INFO[track].title}</h1>
       <div className="plan-summary card">
         <div className="stat big"><span className="v">{fmtMinutes(plan.totalMinutes)}</span><span className="l">всего обучения</span></div>
         <div className="stat big"><span className="v">≈ {plan.etaDays} {plural(plan.etaDays, 'день', 'дня', 'дней')}</span><span className="l">при {plan.minutesPerDay} мин в день</span></div>

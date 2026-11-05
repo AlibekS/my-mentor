@@ -5,6 +5,7 @@ import { PLACEMENT } from '../game/config';
 import { answerTopic, buildPlan, maxQuestions, nextQuestion, startTopic, topicResult, type TopicRun } from '../game/placement';
 import type { GeneralLevel, SelfLevel, Survey } from '../game/progress';
 import { mentorContext } from '../mentor/context';
+import { ensureL2Plan } from '../game/tracks';
 import { Shell } from '../shell/shell';
 import { go } from '../state/router';
 import { useStore } from '../state/store';
@@ -54,7 +55,11 @@ export function Onboarding() {
               <li><strong>Твоя программа</strong> — порядок модулей, стартовые проценты и срок.</li>
             </ol>
             <p className="muted">Справа внизу живёт ментор 👾 — его можно спросить о чём угодно по ходу.</p>
-            <button className="btn primary big" onClick={() => setStage('survey')} autoFocus>Начать →</button>
+            <div className="row gap wrap">
+              <button className="btn primary big" onClick={() => setStage('survey')} autoFocus>Начать L3 Quest →</button>
+              <button className="btn big" onClick={() => (update((p) => { p.track = 'l2'; ensureL2Plan(p); }), go(''))}>Я пока на L1 — начать с L2 Quest</button>
+            </div>
+            <p className="muted small">L2 Quest — с нуля до уверенной второй линии, без входного теста. Переключаться между треками можно в шапке (L2 / L3).</p>
           </div>
         </div>
       </div>

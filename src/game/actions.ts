@@ -3,7 +3,7 @@ import type { ExecRecord } from '../shell/types';
 import { XP } from './config';
 import { quizXp, streakBonus, taskXp } from './levels';
 import { bumpMastery } from './mastery';
-import type { LessonProgress, Progress, TaskProgress } from './progress';
+import { planItemOf, type LessonProgress, type Progress, type TaskProgress } from './progress';
 import { reviewResult, scheduleReview } from './review';
 
 const dayKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -119,7 +119,7 @@ export function giveUpQuestion(p: Progress, l: Lesson, qId: string) {
 
 export function completeLesson(p: Progress, m: Module, l: Lesson, now = Date.now()): { xp: number; before: number; after: number } {
   const lp = ensureLesson(p, l, now);
-  const before = p.masteryBest[m.id] ?? p.plan?.items.find((i) => i.moduleId === m.id)?.startPct ?? 0;
+  const before = p.masteryBest[m.id] ?? planItemOf(p, m.id)?.startPct ?? 0;
   if (lp.completedAt) return { xp: 0, before, after: before };
   lp.masteryBefore = before;
   lp.completedAt = now;
@@ -130,6 +130,15 @@ export function completeLesson(p: Progress, m: Module, l: Lesson, now = Date.now
   addXp(p, xp, boss ? `Босс повержен: ${m.title}` : `Урок пройден: ${l.title}`, now);
   const { after } = bumpMastery(p, m);
   p.lastActivity[m.id] = now;
+  // мост L2 → L3: босс модуля L2 даёт стартовый процент в связанных модулях L3
+  if (boss && m.track === 'l2' && m.feedsL3) {
+    for (const [l3, pct] of Object.entries(m.feedsL3)) {
+      p.masteryBest[l3] = Math.max(p.masteryBest[l3] ?? 0, pct);
+      const item = p.plan?.items.find((i) => i.moduleId === l3);
+      if (item && item.startPct < pct) item.startPct = pct;
+    }
+    log(p, `Мост L2 → L3: ${Object.keys(m.feedsL3).join(', ')} — стартовый процент повышен`, undefined, now);
+  }
   return { xp, before, after };
 }
 

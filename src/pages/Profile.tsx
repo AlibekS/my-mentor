@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { modules } from '../content';
+import { currentTrack, TRACK_INFO, trackModules } from '../game/tracks';
 import { ACHIEVEMENTS } from '../game/achievements';
 import { levelProgress, rankForLevel } from '../game/levels';
 import { masteryView, overallReadiness } from '../game/mastery';
@@ -18,6 +18,8 @@ export function Profile() {
   const { progress, update, replace, reset, toast, sync } = useStore();
   const lv = levelProgress(progress.xp);
   const rank = rankForLevel(lv.level);
+  const modules = trackModules(progress);
+  const track = currentTrack(progress);
   const readiness = overallReadiness(modules, progress);
   const states = moduleStates(modules, progress);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -59,7 +61,7 @@ export function Profile() {
             <span className="muted small">{lv.into}/{lv.need} XP</span>
           </div>
           <p className="muted small">Всего {progress.xp} XP{nextRank ? ` · следующий ранг «${nextRank.title}» на ${nextRank.minLevel} уровне` : ''}</p>
-          <div className="readiness">Готовность к роли L3: <strong className="neon">{readiness}%</strong></div>
+          <div className="readiness">Готовность к роли {TRACK_INFO[track].role}: <strong className="neon">{readiness}%</strong></div>
         </div>
       </section>
 

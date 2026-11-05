@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { modules } from '../content';
+import { modules as l3Modules } from '../content';
+import { currentTrack, TRACK_INFO, trackModules } from '../game/tracks';
 import { masteryView, overallReadiness } from '../game/mastery';
 import { lessonStates, moduleStates, nextLesson, orderedModules, planItem } from '../game/unlock';
 import { dueReviews } from '../game/review';
@@ -12,6 +13,8 @@ const MODE_LABEL = { full: 'полностью', partial: 'частично', ex
 
 export function Home() {
   const { progress } = useStore();
+  const track = currentTrack(progress);
+  const modules = trackModules(progress);
   const states = moduleStates(modules, progress);
   const next = nextLesson(modules, progress);
   const due = dueReviews(progress).length;
@@ -22,8 +25,10 @@ export function Home() {
     <div className="page">
       <section className="hero">
         <div>
-          <h1>Карта обучения</h1>
-          <p className="muted">Путь от тикета до первопричины. Готовность к роли L3: <strong className="neon">{readiness}%</strong></p>
+          <h1>{TRACK_INFO[track].title}: карта обучения</h1>
+          <p className="muted">{TRACK_INFO[track].tagline} Готовность к роли {TRACK_INFO[track].role}: <strong className="neon">{readiness}%</strong></p>
+          {track === 'l2' && <p className="small muted">После босса каждого модуля L2 растёт стартовый процент связанных тем в L3 Quest. Английский вводится постепенно: от терминов к перепискам с клиентами.</p>}
+          {track === 'l2' && !modules.length && <p className="note">Модули L2 Quest ещё готовятся.</p>}
         </div>
         <div className="hero-actions">
           {next && (
@@ -52,7 +57,8 @@ export function Home() {
                   </div>
                   <div className="node-badges">
                     {pi && <span className={`chip mode-${pi.mode}`}>{MODE_LABEL[pi.mode]}</span>}
-                    <span className={`chip demand-${m.demand}`} title={m.marketNote}>{DEMAND_LABEL[m.demand]}</span>
+                    {track === 'l3' && <span className={`chip demand-${m.demand}`} title={m.marketNote}>{DEMAND_LABEL[m.demand]}</span>}
+                    {m.feedsL3 && <span className="chip" title={`После босса: ${Object.entries(m.feedsL3).map(([id, pct]) => `${l3Modules.find((x) => x.id === id)?.title ?? id} +${pct}%`).join(', ')}`}>→ L3</span>}
                   </div>
                 </div>
                 <p className="muted">{m.short}</p>

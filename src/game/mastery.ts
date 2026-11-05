@@ -1,6 +1,6 @@
 import { MASTERY } from './config';
 import type { Module } from '../content/types';
-import type { Progress, TaskProgress } from './progress';
+import { planItemOf, type Progress, type TaskProgress } from './progress';
 
 export type MasteryStatus = 'not-started' | 'in-progress' | 'mastered' | 'review-due';
 
@@ -21,7 +21,7 @@ export function taskQuality(t: TaskProgress | undefined): number {
 export function earnedFraction(m: Module, p: Progress): { fraction: number; bossDone: boolean } {
   const w = MASTERY.weights;
   const lessons = m.lessons;
-  const plan = p.plan?.items.find((i) => i.moduleId === m.id);
+  const plan = planItemOf(p, m.id);
   const bossKey = m.boss?.key;
   const bossDone = !!(bossKey && p.lessons[bossKey]?.completedAt);
   if (!lessons.length) return { fraction: 0, bossDone };
@@ -61,7 +61,7 @@ export function earnedFraction(m: Module, p: Progress): { fraction: number; boss
 
 /** Текущее (сырое) освоение 0..100: старт + рост до 100 */
 export function computeMastery(m: Module, p: Progress): number {
-  const start = p.plan?.items.find((i) => i.moduleId === m.id)?.startPct ?? 0;
+  const start = planItemOf(p, m.id)?.startPct ?? 0;
   const { fraction, bossDone } = earnedFraction(m, p);
   let v = start + (100 - start) * fraction;
   if (!bossDone) v = Math.min(v, MASTERY.capWithoutBoss);
@@ -79,7 +79,7 @@ export interface MasteryView {
 
 /** Отображаемое освоение с учётом забывания */
 export function masteryView(m: Module, p: Progress, now = Date.now()): MasteryView {
-  const start = p.plan?.items.find((i) => i.moduleId === m.id)?.startPct ?? 0;
+  const start = planItemOf(p, m.id)?.startPct ?? 0;
   const best = Math.max(p.masteryBest[m.id] ?? 0, computeMastery(m, p));
   const overdue = Object.values(p.review).filter((r) => r.lessonKey.startsWith(m.id + '/') && r.due < now).length;
   const last = p.lastActivity[m.id];

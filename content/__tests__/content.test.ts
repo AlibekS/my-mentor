@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { modules, placementTopics } from '../../src/content';
+import { allModules, l2Modules, modules, placementTopics } from '../../src/content';
 import { Shell } from '../../src/shell/shell';
 import { evaluate } from '../../src/engine/checks';
 import { checkAnswer } from '../../src/engine/normalize';
@@ -17,13 +17,29 @@ import { shellForTask } from '../../src/engine/replay';
  * Если тест упал — в уроке опечатка в решении, проверке или сценарии.
  */
 describe('content integrity', () => {
-  it('has 12 modules with unique ids and valid dependencies', () => {
+  it('has 12 L3 modules with unique ids and valid dependencies', () => {
     expect(modules).toHaveLength(12);
     const ids = new Set(modules.map((m) => m.id));
     for (const m of modules) for (const r of m.requires) expect(ids.has(r), `${m.id} requires ${r}`).toBe(true);
   });
 
-  for (const m of modules.filter((x) => x.status === 'ready')) {
+  it('L2 modules: ids prefixed l2-, unique lesson keys, deps inside L2, feedsL3 point to L3 modules', () => {
+    const l2ids = new Set(l2Modules.map((m) => m.id));
+    const l3ids = new Set(modules.map((m) => m.id));
+    for (const m of l2Modules) {
+      expect(m.id.startsWith('l2-'), m.id).toBe(true);
+      for (const r of m.requires) expect(l2ids.has(r), `${m.id} requires ${r}`).toBe(true);
+      for (const [k, v] of Object.entries(m.feedsL3 ?? {})) {
+        expect(l3ids.has(k), `${m.id} feedsL3 ${k}`).toBe(true);
+        expect(v).toBeGreaterThan(0);
+        expect(v).toBeLessThanOrEqual(40);
+      }
+    }
+    const keys = allModules.flatMap((m) => [...m.lessons, ...(m.boss ? [m.boss] : [])].map((l) => l.key));
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  for (const m of allModules.filter((x) => x.status === 'ready')) {
     describe(m.id, () => {
       it('has 3–6 lessons and a boss', () => {
         expect(m.lessons.length).toBeGreaterThanOrEqual(3);
@@ -50,6 +66,16 @@ describe('content integrity', () => {
               const r = checkRubric(t.solution, t.write!);
               expect(r.ok, `rubric fails on solution: ${JSON.stringify(r.items.filter((i) => !i.ok))} words=${r.words}`).toBe(true);
               expect(checkRubric(t.write!.template ?? '', t.write!).ok, 'template alone must not pass').toBe(false);
+            });
+            continue;
+          }
+          if (taskTool(l, t) === 'devtools') {
+            it(`${l.id}/${t.id}: DevTools task has an answer`, () => {
+              expect(l.devtools, 'devtools task needs lesson.devtools').toBeDefined();
+              expect(t.hints.length).toBeLessThanOrEqual(3);
+              expect(t.answer, 'devtools task is graded by answer').toBeDefined();
+              if (t.answer!.normalize !== 'keywords') expect(checkAnswer(t.answer!.accept[0], t.answer!)).toBe(true);
+              else expect(t.answer!.keywords?.length).toBeGreaterThan(0);
             });
             continue;
           }

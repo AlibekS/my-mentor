@@ -15,16 +15,31 @@ import { Profile } from './pages/Profile';
 import { Reference } from './pages/Reference';
 import { Review } from './pages/Review';
 import { Market } from './pages/Market';
+import { currentTrack, ensureL2Plan, TRACK_INFO } from './game/tracks';
+import type { Track } from './content/types';
 
 export function App() {
   const route = useRoute();
-  const { progress, toasts, dismissToast, rankUp, ackRankUp } = useStore();
-  const onboarded = progress.onboarding.done;
+  const { progress, update, toasts, dismissToast, rankUp, ackRankUp } = useStore();
+  const track = currentTrack(progress);
+  // L2 Quest не требует входного теста — можно начинать сразу
+  const onboarded = track === 'l2' || progress.onboarding.done;
   const [page, ...rest] = route;
 
   useEffect(() => {
     if (!onboarded && page !== 'onboarding') go('onboarding');
   }, [onboarded, page]);
+  useEffect(() => {
+    if (track === 'l2' && !progress.l2Plan) update((p) => void ensureL2Plan(p));
+  }, [track, progress.l2Plan, update]);
+  const switchTrack = (t: Track) => {
+    if (t === track) return;
+    update((p) => {
+      p.track = t;
+      if (t === 'l2') ensureL2Plan(p);
+    });
+    go(t === 'l3' && !progress.onboarding.done ? 'onboarding' : '');
+  };
 
   const lv = levelProgress(progress.xp);
   const rank = rankForLevel(lv.level);
@@ -54,8 +69,15 @@ export function App() {
       <a className="skip" href="#main">К содержимому</a>
       <header className="topbar">
         <a className="logo" href={href('')}>
-          <span className="logo-mark">L3</span> Quest
+          <span className="logo-mark">{TRACK_INFO[track].role}</span> Quest
         </a>
+        <div className="track-switch" role="group" aria-label="Трек обучения">
+          {(['l2', 'l3'] as Track[]).map((t) => (
+            <button key={t} className={track === t ? 'active' : ''} aria-pressed={track === t} onClick={() => switchTrack(t)} title={TRACK_INFO[t].tagline}>
+              {t.toUpperCase()}
+            </button>
+          ))}
+        </div>
         {onboarded && (
           <nav aria-label="Основная навигация">
             {nav.map((n) => (

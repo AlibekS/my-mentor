@@ -13,6 +13,7 @@ import { Markdown } from '../ui/Markdown';
 import { QuestionCard } from '../ui/QuestionCard';
 import { Terminal } from '../ui/Terminal';
 import { WriteBox } from '../ui/WriteBox';
+import { DevtoolsConsole } from '../ui/DevtoolsConsole';
 import { SqlConsole } from '../ui/SqlConsole';
 import { gradeSql } from '../sql/engine';
 import { ObsConsole } from '../ui/ObsConsole';
@@ -99,7 +100,9 @@ function ReviewTask({ task, lesson, moduleId, onDone, dataset, obs, tool }: { ta
           <button className="btn ghost small" onClick={() => onDone(false)}>Не помню — повторить позже</button>
         </div>
       )}
-      {tool === 'obs' && obs ? (
+      {tool === 'devtools' && lesson.devtools ? (
+        <DevtoolsConsole ds={lesson.devtools} />
+      ) : tool === 'obs' && obs ? (
         <ObsConsole
           ds={obs}
           onQuery={(kind, q) => {

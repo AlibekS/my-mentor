@@ -2,6 +2,10 @@ import type { Scenario } from '../shell/types';
 import type { Shell } from '../shell/shell';
 import type { ExecRecord } from '../shell/types';
 import type { ObsDataset } from '../obs/types';
+import type { DevtoolsDataset } from '../devtools/types';
+
+/** Трек обучения: L2 Quest (с нуля до уверенного L2) или L3 Quest */
+export type Track = 'l2' | 'l3';
 
 /** Проверка результата задания — по состоянию и выводу, а не по точному тексту команды */
 export type Check =
@@ -73,7 +77,7 @@ export interface Task {
   tool?: Tool;
 }
 
-export type Tool = 'terminal' | 'sql' | 'obs';
+export type Tool = 'terminal' | 'sql' | 'obs' | 'devtools';
 
 export interface RubricItem {
   /** что должно быть в тексте (показывается в чек-листе) */
@@ -162,6 +166,8 @@ export interface LessonDef {
   sql?: { dataset: string };
   /** Урок наблюдаемости: вместо терминала — консоль метрик/логов/трейсов */
   obs?: ObsDataset;
+  /** Урок про браузер: тренажёр DevTools (Network, Console, Application) */
+  devtools?: DevtoolsDataset;
   /** Несколько инструментов в одном уроке (вкладки справа), например ['terminal', 'sql', 'obs'] */
   tools?: Tool[];
   tasks: Task[];
@@ -201,6 +207,10 @@ export interface ModuleMeta {
   marketNote?: string;
   status: 'ready' | 'planned';
   estimatedMinutes?: number;
+  /** трек (задаётся по папке: content/modules — l3, content/l2/modules — l2) */
+  track?: Track;
+  /** L2: после босса модуля — стартовый процент в модулях L3 { "07-sql": 20 } */
+  feedsL3?: Record<string, number>;
 }
 
 export interface Module extends ModuleMeta {
@@ -234,15 +244,16 @@ export interface PlacementTopic {
 }
 
 /** Инструменты урока */
-export function lessonTools(l: Pick<LessonDef, 'tools' | 'sql' | 'obs'>): Tool[] {
+export function lessonTools(l: Pick<LessonDef, 'tools' | 'sql' | 'obs' | 'devtools'>): Tool[] {
   if (l.tools?.length) return l.tools;
+  if (l.devtools) return ['devtools'];
   if (l.obs) return ['obs'];
   if (l.sql) return ['sql'];
   return ['terminal'];
 }
 
 /** Инструмент, в котором решается (и проверяется) задание */
-export function taskTool(l: Pick<LessonDef, 'tools' | 'sql' | 'obs'>, t: Task): Tool {
+export function taskTool(l: Pick<LessonDef, 'tools' | 'sql' | 'obs' | 'devtools'>, t: Task): Tool {
   if (t.tool) return t.tool;
   if (t.obs) return 'obs';
   return lessonTools(l)[0];

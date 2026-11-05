@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { modules } from '../content';
+import { allModules as modules } from '../content';
 import { registry } from '../shell/registry';
 import { mentorContext } from '../mentor/context';
 import { useStore } from '../state/store';

@@ -108,6 +108,10 @@ export interface Progress {
   lessons: Record<string, LessonProgress>;
   onboarding: { done: boolean; survey?: Survey; results?: TopicResult[] };
   plan?: Plan;
+  /** активный трек: 'l2' — L2 Quest, 'l3' (по умолчанию) — L3 Quest */
+  track?: 'l2' | 'l3';
+  /** программа L2 Quest (строится автоматически, порядок модулей можно менять) */
+  l2Plan?: Plan;
   /** лучшее достигнутое освоение по модулям (никогда не уменьшается) */
   masteryBest: Record<string, number>;
   lastActivity: Record<string, number>;
@@ -225,4 +229,9 @@ export function importProgress(json: string): Progress {
   delete data.app;
   delete data.exportedAt;
   return migrate(data);
+}
+
+/** Пункт программы для модуля любого трека (id модулей L2 и L3 не пересекаются) */
+export function planItemOf(p: Pick<Progress, 'plan' | 'l2Plan'>, moduleId: string): PlanItem | undefined {
+  return p.plan?.items.find((i) => i.moduleId === moduleId) ?? p.l2Plan?.items.find((i) => i.moduleId === moduleId);
 }
