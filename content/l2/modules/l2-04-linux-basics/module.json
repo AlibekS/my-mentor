@@ -1,0 +1,31 @@
+{
+  "id": "l2-04-linux-basics",
+  "order": 4,
+  "title": "Linux для L2",
+  "titleEn": "Linux Basics for Support",
+  "short": "Терминал без страха: pwd, ls, cd, cat, head, tail, grep, права, sudo и статус сервиса.",
+  "description": "Зайти на сервер, понять, где ты, найти и прочитать нужный файл, отыскать строку в логе, понять «Permission denied» и посмотреть, работает ли сервис. Ничего не чиним — собираем факты для эскалации в L3.",
+  "icon": "🐧",
+  "importance": 5,
+  "requires": [],
+  "skills": [
+    "понимаю приглашение терминала и знаю, на каком я сервере",
+    "перехожу по каталогам и различаю абсолютный и относительный путь",
+    "читаю файл целиком, начало и конец (cat, head, tail) и ищу строку grep",
+    "понимаю вывод ls -l и сообщение Permission denied",
+    "смотрю статус сервиса и его журнал (systemctl status, journalctl -u)"
+  ],
+  "topics": [
+    "Сервер, терминал и навигация",
+    "Чтение файлов: cat, less, head, tail, wc",
+    "Поиск строк: grep",
+    "Права доступа и sudo",
+    "Сервисы: systemctl status и journalctl"
+  ],
+  "reviewedAt": "2026-11-05",
+  "demand": "stable",
+  "marketNote": "В вакансиях L2/Technical Support в SaaS «basic Linux command line» — одно из самых частых требований: L2 смотрит логи и статус сервисов до эскалации в L3.",
+  "status": "ready",
+  "estimatedMinutes": 130,
+  "feedsL3": { "02-linux-files": 25 }
+}
