@@ -1,0 +1,32 @@
+{
+  "id": "l2-03-browser-devtools",
+  "order": 3,
+  "title": "Браузер как инструмент: DevTools",
+  "titleEn": "The Browser as a Tool: DevTools",
+  "short": "DevTools: Network, Console, Application, кэш и куки, HAR-файл — разбираем «у меня не работает» по данным браузера.",
+  "description": "Половина тикетов в SaaS начинается с «у меня не работает» и скриншота. L2 умеет попросить у клиента данные браузера и прочитать их: какой запрос упал, с каким статусом и сообщением, сколько он шёл, что в Console, не истекла ли сессия, не мешает ли кэш или расширение. И собрать из этого эскалацию, которую L3 не вернёт с вопросами.",
+  "icon": "🧭",
+  "importance": 5,
+  "requires": [],
+  "skills": [
+    "объясняю клиенту, как открыть DevTools и записать запросы",
+    "нахожу в Network упавший или медленный запрос",
+    "читаю ответ сервера (JSON) и заголовки: 401, 403, 422",
+    "отличаю ошибку JS, CORS и блокировщик рекламы в Console",
+    "проверяю куки и localStorage, советую жёсткую перезагрузку",
+    "прошу HAR-файл и понимаю, какие в нём секреты"
+  ],
+  "topics": [
+    "Что такое DevTools и как попросить клиента",
+    "Network: статус, метод, время, TTFB",
+    "Ответ сервера и заголовки: 401, 403, 422",
+    "Console: ошибки JS, CORS, заблокированные ресурсы, кэш",
+    "Application: куки, сессия, localStorage; HAR-файл и приватность"
+  ],
+  "reviewedAt": "2026-11-05",
+  "demand": "rising",
+  "marketNote": "В вакансиях Technical Support / L2 для SaaS: «troubleshoot using browser developer tools», «analyze HAR files», «understanding of HTTP, REST APIs, cookies and caching».",
+  "status": "ready",
+  "estimatedMinutes": 140,
+  "feedsL3": { "06-network": 10 }
+}

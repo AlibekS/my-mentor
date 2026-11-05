@@ -1,0 +1,31 @@
+{
+  "id": "l2-07-network",
+  "order": 7,
+  "title": "Сеть для L2",
+  "titleEn": "Networking for L2",
+  "short": "IP и порт, ping и traceroute, DNS и /etc/hosts, nc и curl к порту, ss на сервере, VPN/прокси/фаервол глазами пользователя.",
+  "description": "«Сайт не открывается» бывает по десятку причин: имя не находится (DNS), пакеты не доходят (фаервол, VPN), порт закрыт, сервис слушает не тот адрес. L2 за несколько минут определяет, на каком шаге рвётся цепочка, отличает таймаут от отказа и NXDOMAIN — и пишет клиенту или L3 по делу, а не «у нас всё работает».",
+  "icon": "📡",
+  "importance": 4,
+  "requires": [],
+  "skills": [
+    "читаю адрес вида 10.0.3.21:443 — где IP, где порт",
+    "проверяю узел через ping и вижу, где обрывается traceroute",
+    "узнаю IP домена через dig/nslookup и нахожу подмену в /etc/hosts",
+    "проверяю порт через nc -zv и curl, смотрю ss -tlnp на сервере",
+    "отличаю timeout, connection refused и NXDOMAIN и знаю их типичные причины"
+  ],
+  "topics": [
+    "IP-адрес и порт, localhost и 0.0.0.0",
+    "ping и traceroute",
+    "DNS: dig, nslookup, CNAME, NXDOMAIN, /etc/hosts",
+    "Порты: nc -zv, curl к порту, ss -tlnp",
+    "VPN, прокси, фаервол: timeout vs refused vs NXDOMAIN"
+  ],
+  "reviewedAt": "2026-11-05",
+  "demand": "stable",
+  "marketNote": "В вакансиях L2 Support: «basic networking (DNS, TCP/IP, HTTP)», «troubleshoot connectivity issues», ping/traceroute/nslookup/curl; у SaaS — разбор allowlist-ов и прокси клиентов.",
+  "status": "ready",
+  "estimatedMinutes": 140,
+  "feedsL3": { "06-network": 15 }
+}
