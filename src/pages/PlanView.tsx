@@ -24,7 +24,7 @@ export function PlanView() {
     return (
       <div className="page narrow">
         <h1>Программы пока нет</h1>
-        <a className="btn primary" href={href('onboarding')}>Пройти онбординг</a>
+        {track === 'l2' ? <p className="muted">Модули L2 Quest ещё готовятся — программа соберётся сама, как только они появятся.</p> : <a className="btn primary" href={href('onboarding')}>Пройти онбординг</a>}
       </div>
     );
   }
