@@ -20,7 +20,7 @@ import { ObsConsole } from '../ui/ObsConsole';
 import type { ObsDataset } from '../obs/types';
 import { evalQuery, sameResult } from '../obs/promql';
 import { searchLogs } from '../obs/kql';
-import { fmtDate } from '../ui/common';
+import { NextButton, fmtDate } from '../ui/common';
 
 export function Review() {
   const { progress, update } = useStore();
@@ -92,7 +92,7 @@ function ReviewTask({ task, lesson, moduleId, onDone, dataset, obs, tool }: { ta
       {solved ? (
         <div className="feedback ok">
           <strong>Верно!</strong>
-          <button className="btn primary" onClick={() => onDone(!showSol)} autoFocus>Дальше →</button>
+          <NextButton className="btn primary" onClick={() => onDone(!showSol)}>Дальше →</NextButton>
         </div>
       ) : (
         <div className="row gap">

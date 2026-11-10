@@ -22,7 +22,7 @@ import { ObsConsole, type ObsKind } from '../ui/ObsConsole';
 import { evalQuery, sameResult } from '../obs/promql';
 import { searchLogs } from '../obs/kql';
 import { gradeSql, resultText, type QueryResult } from '../sql/engine';
-import { ProgressBar, plural } from '../ui/common';
+import { NextButton, ProgressBar, plural } from '../ui/common';
 
 /** Запуск SQL-запроса как запись истории (для статистики и ментора) */
 export function sqlRecord(query: string, r: QueryResult): ExecRecord {
@@ -358,7 +358,7 @@ function PracticeStep({ module, lesson, base }: { module: Module; lesson: Lesson
                 {task.explanation && <Markdown text={task.explanation} />}
                 <details><summary>Эталонное решение</summary><pre className="mono">{task.solution}</pre></details>
                 {idx < lesson.tasks.length - 1 ? (
-                  <button className="btn primary" onClick={() => setIdx(idx + 1)} autoFocus>Следующее задание →</button>
+                  <NextButton className="btn primary" onClick={() => setIdx(idx + 1)}>Следующее задание →</NextButton>
                 ) : allSolved ? (
                   <a className="btn primary" href={href(`${base}/quiz`)}>К мини-тесту →</a>
                 ) : (

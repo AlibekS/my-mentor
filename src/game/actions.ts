@@ -36,7 +36,8 @@ export function touchDay(p: Progress, now = new Date()): number {
 }
 
 export function ensureLesson(p: Progress, l: Lesson, now = Date.now()): LessonProgress {
-  if (!p.lessons[l.key]) p.lessons[l.key] = { started: now, tasks: {}, quiz: {}, xp: 0, timeMs: 0 };
+  // masteryBefore — освоение темы на момент начала урока (для «было → стало» в итогах)
+  if (!p.lessons[l.key]) p.lessons[l.key] = { started: now, tasks: {}, quiz: {}, xp: 0, timeMs: 0, masteryBefore: p.masteryBest[l.moduleId] ?? planItemOf(p, l.moduleId)?.startPct ?? 0 };
   return p.lessons[l.key];
 }
 
@@ -121,7 +122,7 @@ export function completeLesson(p: Progress, m: Module, l: Lesson, now = Date.now
   const lp = ensureLesson(p, l, now);
   const before = p.masteryBest[m.id] ?? planItemOf(p, m.id)?.startPct ?? 0;
   if (lp.completedAt) return { xp: 0, before, after: before };
-  lp.masteryBefore = before;
+  lp.masteryBefore ??= before;
   lp.completedAt = now;
   const boss = l.kind === 'boss';
   const xp = boss ? XP.bossComplete : XP.lessonComplete;

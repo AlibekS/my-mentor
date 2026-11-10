@@ -51,3 +51,23 @@ export function fmtDate(ts: number) {
 }
 
 export const DEMAND_LABEL = { rising: '↗ спрос растёт', stable: '→ спрос стабилен', declining: '↘ спрос падает' } as const;
+
+
+/**
+ * Кнопка «дальше», которая берёт фокус при появлении (Enter → дальше), но НЕ отбирает его,
+ * если человек сейчас печатает в терминале, SQL-редакторе или консоли: иначе набранный текст
+ * пропадал бы, а Enter неожиданно переключал задание.
+ */
+export function NextButton({ children, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  const ref = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    const a = document.activeElement;
+    const typing = a instanceof HTMLElement && !!a.closest('.terminal-host, .sql-console, .obs, .devtools') && (a instanceof HTMLTextAreaElement || a instanceof HTMLInputElement);
+    if (!typing) ref.current?.focus();
+  }, []);
+  return (
+    <button ref={ref} {...props}>
+      {children}
+    </button>
+  );
+}

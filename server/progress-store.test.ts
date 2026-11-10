@@ -38,7 +38,11 @@ describe('progress file store', () => {
     const files = readdirSync(join(dir, 'backups'));
     expect(files.filter((f) => /^progress-\d{4}-\d{2}-\d{2}\.json$/.test(f))).toHaveLength(30);
     expect(files).toContain('progress-2026-11-02.json');
-    writeProgress(dir, { version: 1, xp: 0, updatedAt: 4, onboarding: { done: false } }, new Date('2026-11-02T12:00:00'));
+    // «бедная» версия поверх богатой (начали заново в другом браузере) — копия «до перезаписи»
+    writeProgress(dir, prog(500, 10), new Date('2026-11-02T11:30:00'));
+    writeProgress(dir, prog(20, 11), new Date('2026-11-02T11:40:00'));
+    expect(readdirSync(join(dir, 'backups')).filter((f) => f.startsWith('progress-before-overwrite-'))).toHaveLength(1);
+    writeProgress(dir, { version: 1, xp: 0, updatedAt: 12, onboarding: { done: false } }, new Date('2026-11-02T12:00:00'));
     expect(readdirSync(join(dir, 'backups')).some((f) => f.startsWith('progress-before-reset-'))).toBe(true);
   });
 });

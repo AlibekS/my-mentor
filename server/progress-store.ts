@@ -60,12 +60,46 @@ export function writeProgress(dir: string, progress: Progress, now = new Date())
     const old = readdirSync(backups).filter((f) => /^progress-\d{4}-\d{2}-\d{2}\.json$/.test(f)).sort();
     for (const f of old.slice(0, Math.max(0, old.length - KEEP_BACKUPS))) rmSync(join(backups, f), { force: true });
   }
+  // новая версия «беднее» файла (меньше XP или пройденных уроков) — так бывает, если прогресс начали заново
+  // в другом браузере, пока файл не читался. Перезаписываем, но сохраняем копию «до»
+  if (existing && weight(progress) < weight(existing.progress) && !isEmpty(progress)) {
+    const backups = join(dir, 'backups');
+    copyFileSync(file, join(backups, `progress-before-overwrite-${day(now)}-${now.getTime()}.json`));
+    const olds = readdirSync(backups).filter((f) => f.startsWith('progress-before-overwrite-')).sort();
+    for (const f of olds.slice(0, Math.max(0, olds.length - 10))) rmSync(join(backups, f), { force: true });
+  }
   const savedAt = now.toISOString();
+  const text = JSON.stringify({ app: 'l3-quest', exportedAt: savedAt, ...progress }, null, 2);
   // атомарно: сначала временный файл, потом переименование — файл не испортится при обрыве
   const tmp = join(dir, `.${FILE}.${process.pid}.tmp`);
-  writeFileSync(tmp, JSON.stringify({ app: 'l3-quest', exportedAt: savedAt, ...progress }, null, 2), 'utf8');
-  renameSync(tmp, file);
+  writeFileSync(tmp, text, 'utf8');
+  if (!renameWithRetry(tmp, file)) {
+    // Windows: OneDrive или антивирус держат файл открытым — переименование запрещено, пишем поверх
+    writeFileSync(file, text, 'utf8');
+    rmSync(tmp, { force: true });
+  }
   return { ok: true, savedAt };
+}
+
+/** «Вес» прогресса: XP и число пройденных уроков */
+function weight(p: Progress): number {
+  const lessons = Object.values((p.lessons as Record<string, { completedAt?: number }> | undefined) ?? {}).filter((l) => l?.completedAt).length;
+  return (Number(p.xp) || 0) + lessons * 1000;
+}
+
+/** rename с повторами: на Windows файл может быть на мгновение занят клиентом OneDrive (EPERM/EBUSY/EACCES) */
+function renameWithRetry(from: string, to: string, attempts = 6): boolean {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      renameSync(from, to);
+      return true;
+    } catch (e) {
+      const code = (e as NodeJS.ErrnoException).code;
+      if (code !== 'EPERM' && code !== 'EBUSY' && code !== 'EACCES') throw e;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 60 * (i + 1));
+    }
+  }
+  return false;
 }
 
 function safeRead(dir: string) {

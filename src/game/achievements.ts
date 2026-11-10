@@ -50,6 +50,12 @@ export const ACHIEVEMENTS: Achievement[] = [
   { id: 'mentor-friend', title: 'Спросить у старшего', icon: '👾', hint: 'Задай 5 вопросов ментору', test: (p) => p.stats.mentorQuestions >= 5 },
   { id: 'rank-up', title: 'Эволюция', icon: '🧬', hint: 'Получи новый ранг', test: (p) => levelFromXp(p.xp) >= 4 },
   { id: 'l3-ready', title: 'Готов к L3', icon: '🏆', hint: 'Достигни ранга «Инженер L3» (уровень 12)', test: (p) => levelFromXp(p.xp) >= 12 },
+  // --- L2 Quest ---
+  { id: 'l2-first-ticket', title: 'Первый тикет', icon: '🎟️', hint: 'Пройди модуль «Роль L2 и работа с тикетами»', test: moduleDone('l2-01-support-role') },
+  { id: 'l2-devtools', title: 'DevTools-детектив', icon: '🕵️', hint: 'Пройди модуль «Браузер как инструмент: DevTools»', test: moduleDone('l2-03-browser-devtools') },
+  { id: 'l2-sql', title: 'SELECT без страха', icon: '🗃️', hint: 'Пройди модуль «SQL на чтение»', test: moduleDone('l2-06-sql-read') },
+  { id: 'l2-english', title: 'Reply sent', icon: '✉️', hint: 'Пройди модуль «Коммуникация и английский в поддержке»', test: moduleDone('l2-08-communication') },
+  { id: 'l2-graduate', title: 'Выпускник L2 Quest', icon: '🎓', hint: 'Победи всех «боссов» L2 Quest', test: (p, c) => { const l2 = c.modules.filter((m) => m.track === 'l2'); return l2.length > 0 && l2.every((m) => isModuleDone(m, p)); } },
   { id: 'clean-run', title: 'Чистый прогон', icon: '✨', hint: 'Пройди 5 уроков без «Показать решение»', test: (p) => lessonsDone(p).filter(([, l]) => Object.values(l.tasks).every((t) => !t.solutionShown)).length >= 5 },
 ];
 
